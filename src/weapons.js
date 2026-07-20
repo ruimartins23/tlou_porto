@@ -94,7 +94,7 @@ function buildShotgun() {
 }
 
 const WEAPONS = {
-  plank:    { name: 'Plank',        kind: 'melee',   dmg: 34, range: 2.15, cooldown: 0.55, noise: 4 },
+  plank:    { name: 'Plank',        kind: 'melee',   dmg: 48, range: 2.5, cooldown: 0.5, noise: 4 },
   revolver: { name: 'Revolver',     kind: 'gun',     dmg: 62, range: 90, cooldown: 0.5, noise: 34, pellets: 1, spread: 0.006, mag: 6, kick: 0.055 },
   shotgun:  { name: 'Sawn-off',     kind: 'gun',     dmg: 26, range: 34, cooldown: 0.9, noise: 44, pellets: 8, spread: 0.09, mag: 2, kick: 0.14 },
 };
@@ -181,7 +181,8 @@ export class WeaponSystem {
     const rest = this.models[key].userData.rest;
     this.models[key].position.copy(rest.pos);
     this.models[key].rotation.copy(rest.rot);
-    this.cooldown = Math.max(this.cooldown, 0.25);
+    this.cooldown = Math.max(this.cooldown, 0.28);
+    this.equipT = 0;          // play the raise-from-hip animation
     this.audio?.play('weaponSwitch');
     this.onHudChange?.();
   }
@@ -240,22 +241,45 @@ export class WeaponSystem {
     this.swingT = 0;
     this.audio?.play('swing');
     const fwd = this.forwardVec();
-    let hit = false;
+    let hit = false, killed = false;
     for (const e of this.enemies) {
       if (!e.active || e.dead) continue;
       const to = e.group.position.clone(); to.y += 1.1; to.sub(this.player.position);
       const d = to.length();
       if (d < w.range) {
-        to.normalize();
-        if (to.dot(fwd) > 0.45 || d < 0.9) {
-          e.takeHit(w.dmg, new THREE.Vector3(to.x, 0, to.z).normalize());
-          hit = true;
+        const flat = new THREE.Vector3(to.x, 0, to.z).normalize();
+        // generous arc so hits land where they look like they should
+        if (to.normalize().dot(fwd) > 0.3 || d < 1.2) {
+          const k = e.takeHit(w.dmg, flat, { stun: 0.42, melee: true });
+          const impact = e.group.position.clone(); impact.y += 1.05;
+          this.spawnImpact(impact, true);       // blood burst at the strike
+          hit = true; killed = killed || k;
         }
       }
+    }
+    if (hit) {
+      this.onHit?.(false, killed);               // crosshair hitmarker
+      this.player.shake(killed ? 0.17 : 0.1);    // felt impact
+      this.swingHold = 0.05;                      // hit-stick: plank "connects" and holds a beat
+      this.audio?.play('meleeConnect');
     }
     // melee is quiet — only a soft noise
     if (this.onNoise) this.onNoise(this.player.position.clone(), w.noise);
     return hit;
+  }
+
+  // any live enemy inside the plank's reach & arc right now? (drives the crosshair cue)
+  meleeReady() {
+    const w = this.activeWeapon;
+    if (!w || w.kind !== 'melee') return false;
+    const fwd = this.forwardVec();
+    for (const e of this.enemies) {
+      if (!e.active || e.dead) continue;
+      const to = e.group.position.clone(); to.y += 1.1; to.sub(this.player.position);
+      const d = to.length();
+      if (d < w.range && (to.normalize().dot(fwd) > 0.28 || d < 1.2)) return true;
+    }
+    return false;
   }
 
   shoot(w) {
@@ -379,8 +403,10 @@ export class WeaponSystem {
 
   update(dt, moving, running) {
     this.cooldown = Math.max(0, this.cooldown - dt);
-    this.swingT = Math.min(1, this.swingT + dt * 3.2);
+    if (this.swingHold > 0) this.swingHold -= dt;              // hit-stick: hold the plank on contact
+    else this.swingT = Math.min(1, this.swingT + dt * 3.4);
     this.recoilT = Math.max(0, this.recoilT - dt * 6);
+    this.equipT = Math.min(1, (this.equipT ?? 1) + dt * 3.6);  // draw/raise animation
 
     // reload timing
     if (this.reloadT > 0) {
@@ -408,10 +434,12 @@ export class WeaponSystem {
 
     if (w.kind === 'melee') {
       const s = this.swingT;
-      if (s < 1) {
-        const arc = Math.sin(s * Math.PI);
-        model.position.set(rest.pos.x - arc * 0.16, rest.pos.y + arc * 0.05, rest.pos.z - arc * 0.18);
-        model.rotation.set(rest.rot.x - arc * 1.4, rest.rot.y - arc * 0.9, rest.rot.z);
+      if (s < 1 || this.swingHold > 0) {
+        // fast overhead chop that whips across the view, then follows through
+        const arc = Math.sin(Math.min(1, s) * Math.PI);
+        const chop = Math.pow(Math.max(0, 1 - s * 1.6), 2); // sharp downstroke early
+        model.position.set(rest.pos.x - arc * 0.24, rest.pos.y + chop * 0.14 - arc * 0.06, rest.pos.z - arc * 0.26);
+        model.rotation.set(rest.rot.x - arc * 1.9, rest.rot.y - arc * 1.1, rest.rot.z + arc * 0.2);
       } else {
         model.position.set(rest.pos.x + bobX, rest.pos.y + bobY, rest.pos.z);
         model.rotation.copy(rest.rot);
@@ -441,6 +469,15 @@ export class WeaponSystem {
         THREE.MathUtils.lerp(pz, aimZ, ab)
       );
       model.rotation.set(ry, THREE.MathUtils.lerp(rest.rot.y, 0, ab), rest.rot.z);
+    }
+
+    // equip raise: the weapon swings up from the hip when first drawn
+    if (this.equipT < 1) {
+      const e = 1 - this.equipT;
+      const ease = e * e;
+      model.position.y -= ease * 0.42;
+      model.position.z += ease * 0.13;
+      model.rotation.x += ease * 1.0;
     }
   }
 }

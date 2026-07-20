@@ -1,11 +1,25 @@
 // CINZA — first-person survivor: movement, health, plank melee, bricks, flashlight.
 import * as THREE from 'three';
 
+// crafting recipes — components are scavenged; two of them (alcohol, rag) are shared
+// across recipes, so every craft is a real choice (TLOU resource tension).
+export const COMPONENTS = ['rag', 'alcohol', 'blade', 'scrap'];
+export const RECIPES = [
+  { id: 'bandage', out: 'bandages', need: { rag: 1, alcohol: 1 } },
+  { id: 'molotov', out: 'molotovs', need: { alcohol: 1, scrap: 1 } },
+  { id: 'shiv',    out: 'shivs',    need: { blade: 1, rag: 1 } },
+];
+
 const EYE_HEIGHT = 1.68;
 const RADIUS = 0.42;
 const WALK = 3.9;
 const RUN = 7.0;
+const CROUCH = 2.5;
 const GRAVITY = 22;
+// sprint stamina — generous enough for traversal bursts, but a marathon flee runs you dry
+const STAM_DRAIN = 15;   // per second while sprinting
+const STAM_REGEN = 20;   // per second while recovering
+const STAM_RECOVER = 28; // must reach this before you can sprint again after bottoming out
 
 export class Player {
   constructor(camera, world, audio) {
@@ -29,13 +43,29 @@ export class Player {
     this.maxHealth = 100;
     this.bandages = 1;
     this.bricks = 0;
+    this.shivs = 0;
+    this.components = { rag: 0, alcohol: 0, blade: 0, scrap: 0 };
     this.hurtT = 0;
 
     this.thrownBricks = [];
+    this.molotovs = 0;
+    this.thrownMolotovs = [];
+    this.fires = [];           // active fire pools
     this.onBrickLand = null;
+    this.onMolotovLand = null;
     this.onSplash = null;
     this.stepAccum = 0;
     this.running = false;
+    this.crouching = false;
+    this.crouchBlend = 0;
+    // sprint stamina
+    this.stamina = 100;
+    this.maxStamina = 100;
+    this.staminaLock = false;   // true once drained — forces a rest before you can sprint again
+    this.staminaRest = 0;       // short delay before regen kicks in
+    // camera shake (impacts, damage, nearby gunfire)
+    this.shakeMag = 0;
+    this._shakeOsc = 0;
 
     this.downRay = new THREE.Raycaster();
     this.downRay.far = 60;
@@ -82,10 +112,31 @@ export class Player {
     return true;
   }
 
+  // ---- crafting ----
+  canCraft(id) {
+    const r = RECIPES.find((x) => x.id === id);
+    return !!r && Object.entries(r.need).every(([k, v]) => (this.components[k] || 0) >= v);
+  }
+
+  craft(id) {
+    if (!this.canCraft(id)) return false;
+    const r = RECIPES.find((x) => x.id === id);
+    for (const [k, v] of Object.entries(r.need)) this.components[k] -= v;
+    this[r.out]++;                 // bandages / molotovs / shivs
+    this.audio?.play('craft');
+    return true;
+  }
+
+  addComponent(kind, n = 1) { this.components[kind] = (this.components[kind] || 0) + n; }
+
+  // a jolt to the camera — call on impacts, damage, nearby blasts
+  shake(mag) { this.shakeMag = Math.min(0.32, this.shakeMag + mag); }
+
   takeDamage(dmg) {
     if (this.health <= 0) return;
     this.health -= dmg;
     this.hurtT = 0.5;
+    this.shake(0.14);
     this.audio?.play('hurt');
   }
 
@@ -107,6 +158,55 @@ export class Player {
     this.thrownBricks.push({ mesh, vel: dir.multiplyScalar(13.5), alive: true, spin: Math.random() * 4 });
     this.audio?.play('throw');
     return true;
+  }
+
+  throwMolotov(scene) {
+    if (this.molotovs <= 0 || !this.canControl) return false;
+    this.molotovs--;
+    const dir = new THREE.Vector3(
+      -Math.sin(this.yaw) * Math.cos(this.pitch),
+      Math.sin(this.pitch) + 0.26,
+      -Math.cos(this.yaw) * Math.cos(this.pitch)
+    ).normalize();
+    const grp = new THREE.Group();
+    const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, 0.22, 8),
+      new THREE.MeshStandardMaterial({ color: 0x2f5238, roughness: 0.25, metalness: 0.1, transparent: true, opacity: 0.8 }));
+    const rag = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 5), new THREE.MeshBasicMaterial({ color: 0xffb050 }));
+    rag.position.y = 0.15;
+    grp.add(bottle, rag);
+    const flame = new THREE.PointLight(0xff7a20, 5, 6, 2);
+    flame.position.y = 0.18;
+    grp.add(flame);
+    grp.position.copy(this.position).addScaledVector(dir, 0.6);
+    scene.add(grp);
+    this.thrownMolotovs.push({ mesh: grp, vel: dir.multiplyScalar(12.5), alive: true, spin: Math.random() * 6 });
+    this.audio?.play('throw');
+    return true;
+  }
+
+  // shatter → a pool of fire that burns anything standing in it
+  igniteFire(scene, pos) {
+    this.audio?.play('molotov', pos.clone());
+    const grp = new THREE.Group();
+    grp.position.copy(pos);
+    const sprites = [];
+    for (let i = 0; i < 12; i++) {
+      const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: this.world.glowTex, color: i % 2 ? 0xff5a12 : 0xffc248,
+        blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.9,
+      }));
+      const a = Math.random() * Math.PI * 2, r = Math.random() * 1.7;
+      spr.position.set(Math.cos(a) * r, 0.2, Math.sin(a) * r);
+      spr.scale.setScalar(0.9 + Math.random() * 1.0);
+      spr.userData = { ph: Math.random() * 6, r, spd: 0.5 + Math.random() * 0.7 };
+      grp.add(spr); sprites.push(spr);
+    }
+    const light = new THREE.PointLight(0xff6820, 30, 15, 2);
+    light.position.y = 1.1;
+    grp.add(light);
+    scene.add(grp);
+    this.fires.push({ grp, sprites, light, pos: pos.clone(), t: 0, life: 5.0, radius: 3.3, dmgT: 0 });
+    if (this.onMolotovLand) this.onMolotovLand(pos.clone());   // loud — wakes/draws the block
   }
 
   groundHeightAt(x, z, fromY) {
@@ -178,6 +278,55 @@ export class Player {
       }
     }
     this.thrownBricks = this.thrownBricks.filter((b) => b.alive || b.mesh.parent);
+
+    // molotovs in flight — shatter into fire on any enemy or the ground
+    for (const m of this.thrownMolotovs) {
+      if (!m.alive) continue;
+      m.vel.y -= GRAVITY * 0.85 * dt;
+      m.mesh.position.addScaledVector(m.vel, dt);
+      m.mesh.rotation.x += m.spin * dt;
+      const p = m.mesh.position;
+      let hitEnemy = false;
+      for (const e of enemies) {
+        if (!e.active || e.dead) continue;
+        const ep = e.group.position;
+        if (Math.hypot(p.x - ep.x, p.z - ep.z) < 0.7 && p.y > ep.y && p.y < ep.y + 2) { hitEnemy = true; break; }
+      }
+      const gy = this.groundHeightAt(p.x, p.z, p.y) ?? -2;
+      if (hitEnemy || p.y <= gy + 0.1 || p.y < -1.8) {
+        m.alive = false;
+        scene.remove(m.mesh);
+        this.igniteFire(scene, new THREE.Vector3(p.x, Math.max(gy, Math.min(p.y, gy + 0.1)), p.z));
+      }
+    }
+    this.thrownMolotovs = this.thrownMolotovs.filter((m) => m.alive);
+
+    // burning fire pools — animate flames + deal damage over time to anything inside
+    for (const f of this.fires) {
+      f.t += dt;
+      const fade = Math.min(1, f.t / 0.3) * Math.min(1, Math.max(0, f.life - f.t) / 0.8);
+      f.light.intensity = (24 + Math.sin(f.t * 34) * 8) * fade;
+      for (const spr of f.sprites) {
+        const u = spr.userData;
+        spr.position.y = 0.2 + Math.abs(Math.sin(f.t * 6 * u.spd + u.ph)) * 0.9;
+        spr.material.opacity = 0.85 * fade;
+        spr.material.rotation += dt * 2.5;
+      }
+      f.dmgT += dt;
+      if (f.dmgT >= 0.4) {
+        f.dmgT = 0;
+        for (const e of enemies) {
+          if (!e.active || e.dead) continue;
+          const ep = e.group.position;
+          if (Math.hypot(ep.x - f.pos.x, ep.z - f.pos.z) < f.radius && Math.abs(ep.y - f.pos.y) < 2.5) {
+            const away = new THREE.Vector3(ep.x - f.pos.x, 0, ep.z - f.pos.z).normalize();
+            e.takeHit(20, away, { stun: 0.15, silent: true });
+          }
+        }
+      }
+      if (f.t >= f.life) { scene.remove(f.grp); f.done = true; }
+    }
+    this.fires = this.fires.filter((f) => !f.done);
   }
 
   update(dt, scene, enemies = []) {
@@ -187,10 +336,17 @@ export class Player {
 
     this.hurtT = Math.max(0, this.hurtT - dt);
     this.running = false;
+    this.crouching = false;
 
     if (this.canControl) {
-      const run = this.keys['ShiftLeft'] || this.keys['ShiftRight'];
-      const speed = run ? RUN : WALK;
+      // crouch is bound to C, not Ctrl — Ctrl+W would close the browser tab
+      const crouchKey = this.keys['KeyC'];
+      const wantRun = (this.keys['ShiftLeft'] || this.keys['ShiftRight']) && !crouchKey && !this.focusing;
+      const run = wantRun && !this.staminaLock && this.stamina > 0;   // no sprint on an empty tank
+      this.crouching = !!crouchKey && this.grounded && !run;
+      // focusing (listen mode) slows you to a careful creep
+      let speed = run ? RUN : this.crouching ? CROUCH : WALK;
+      if (this.focusing) speed = Math.min(speed, CROUCH);
       const f = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
       const r = new THREE.Vector3(-f.z, 0, f.x);
       const move = new THREE.Vector3();
@@ -204,12 +360,25 @@ export class Player {
         this.position.x += move.x;
         this.position.z += move.z;
         this.stepAccum += move.length();
-        const stride = run ? 2.6 : 1.9;
+        // crouch = long, near-silent stride; run = short, loud
+        const stride = run ? 2.6 : this.crouching ? 2.4 : 1.9;
         if (this.stepAccum > stride && this.grounded) {
           this.stepAccum = 0;
-          this.audio?.play('step');
+          this.audio?.play(run ? 'stepRun' : this.crouching ? 'stepCrouch' : 'step');
         }
       }
+    }
+    this.crouchBlend += ((this.crouching ? 1 : 0) - this.crouchBlend) * Math.min(1, dt * 11);
+
+    // stamina: sprinting burns it, everything else recovers it (after a beat)
+    if (this.running) {
+      this.stamina = Math.max(0, this.stamina - STAM_DRAIN * dt);
+      this.staminaRest = 0.5;
+      if (this.stamina <= 0) this.staminaLock = true;
+    } else {
+      this.staminaRest = Math.max(0, this.staminaRest - dt);
+      if (this.staminaRest <= 0) this.stamina = Math.min(this.maxStamina, this.stamina + STAM_REGEN * dt);
+      if (this.staminaLock && this.stamina >= STAM_RECOVER) this.staminaLock = false;
     }
 
     this.resolveCollisions(this.position);
@@ -217,6 +386,8 @@ export class Player {
     const ground = this.groundHeightAt(this.position.x, this.position.z, this.position.y);
     const targetY = ground !== null ? ground + EYE_HEIGHT : null;
     if (targetY !== null && this.position.y <= targetY + 0.25 && this.velY <= 0) {
+      // landing from a fall — thud scaled to impact
+      if (!this.grounded && this.velY < -6) this.audio?.play('land');
       this.position.y += (targetY - this.position.y) * Math.min(1, dt * 18);
       if (Math.abs(targetY - this.position.y) < 0.02) this.position.y = targetY;
       this.velY = 0;
@@ -240,14 +411,19 @@ export class Player {
 
     this.updateBricks(dt, scene, enemies);
 
-    // head bob + hurt shake
+    // head bob + hurt shake + impact shake + crouch dip
     let bob = 0;
     if (this.moving && this.grounded) {
-      this.bobT = (this.bobT || 0) + dt * (this.running ? 11 : 8);
-      bob = Math.sin(this.bobT) * 0.045;
+      this.bobT = (this.bobT || 0) + dt * (this.running ? 11 : this.crouching ? 5 : 8);
+      bob = Math.sin(this.bobT) * (this.crouching ? 0.02 : 0.045);
     }
-    const shake = this.hurtT > 0 ? Math.sin(this.hurtT * 60) * 0.02 * this.hurtT : 0;
-    this.camera.position.set(this.position.x + shake, this.position.y + bob, this.position.z);
+    const hurt = this.hurtT > 0 ? Math.sin(this.hurtT * 60) * 0.02 * this.hurtT : 0;
+    this._shakeOsc += dt * 46;
+    this.shakeMag = Math.max(0, this.shakeMag - dt * 1.5);
+    const shx = hurt + Math.sin(this._shakeOsc) * this.shakeMag;
+    const shy = Math.cos(this._shakeOsc * 1.27) * this.shakeMag;
+    const crouchDip = this.crouchBlend * 0.52;
+    this.camera.position.set(this.position.x + shx, this.position.y + bob - crouchDip + shy, this.position.z);
 
     // flashlight follows the view — origin pushed forward so the view-model
     // weapon never sits point-blank inside the cone

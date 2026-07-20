@@ -175,18 +175,33 @@ export class World {
     }
   }
 
+  // A grounded debris mound: every rock sits ON the floor (base layer) or nestled on
+  // the rocks below (cap layer). Height comes from stacking, never from floating a rock
+  // in mid-air — so no rock ever hovers over a gap.
   rubblePile(x, z, groundY, radius = 2.2, height = 1.4, count = 12) {
     const grp = new THREE.Group();
-    for (let i = 0; i < count; i++) {
-      const s = 0.35 + rand() * radius * 0.4;
-      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), this.mats.rubbleRock);
+    const place = (rr, y, s) => {
       const a = rand() * Math.PI * 2;
-      const rr = rand() * radius;
-      rock.position.set(x + Math.cos(a) * rr, groundY + rand() * height * (1 - rr / radius), z + Math.sin(a) * rr);
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), this.mats.rubbleRock);
+      rock.position.set(x + Math.cos(a) * rr, y, z + Math.sin(a) * rr);
       rock.rotation.set(rand() * 3, rand() * 3, rand() * 3);
       rock.castShadow = true;
       rock.receiveShadow = true;
       grp.add(rock);
+    };
+    // base layer — grounded rocks across the whole footprint (bigger toward the centre)
+    for (let i = 0; i < count; i++) {
+      const rr = Math.sqrt(rand()) * radius;                 // uniform over the disc
+      const centrality = 1 - rr / radius;
+      const s = 0.34 + (0.4 + centrality * 0.8) * rand() * radius * 0.4;
+      place(rr, groundY + s * 0.5, s);                        // base half-buried in the floor
+    }
+    // cap layer — a few larger rocks near the centre, resting on the mound (supported, not floating)
+    const caps = Math.max(2, Math.round(count / 4));
+    for (let i = 0; i < caps; i++) {
+      const rr = rand() * radius * 0.42;                      // stay over the dense centre
+      const s = 0.5 + rand() * radius * 0.32;
+      place(rr, groundY + Math.min(height, s * 0.75 + 0.25), s);
     }
     this.scene.add(grp);
     this.solid(x - radius, x + radius, groundY, groundY + height + 0.6, z - radius, z + radius);
@@ -430,6 +445,31 @@ export class World {
     this.solid(-115, 6, -1, 26, -21, -19);
     this.solid(16, 100, -1, 26, -21, -19);
 
+    // ---- SOLID HILLSIDE under every terrace so the city never floats.
+    // Porto is one continuous rock hill; each terrace is the top of a retaining
+    // mass. Fill the volume below each platform (leaving the street corridors open).
+    const T = 0.12;
+    // under L1 Largo (y12) — split around the Rua de São João corridor (x 6..16)
+    this.hillMass(-31, 5.5, -91, -54, 12 - T);
+    this.hillMass(16.5, 41, -91, -54, 12 - T);
+    // slope faces flanking the São João street as it climbs (x 6..16)
+    this.hillMass(4.5, 6.2, -55, -20, 12 - T);
+    this.hillMass(15.8, 17.5, -55, -20, 12 - T);
+    // under L2 Praça/São Bento (y22) — split around the Flores ramp (x22..32)
+    // and the Sé alley (x60..70)
+    this.hillMass(-21, 22, -153, -88, 22 - T);
+    this.hillMass(32, 60, -153, -88, 22 - T);
+    this.hillMass(70, 93, -153, -88, 22 - T);
+    this.hillMass(22, 32, -153, -118, 22 - T);   // north of the Flores ramp top
+    this.hillMass(60, 70, -153, -112, 22 - T);   // north of the Sé-alley ramp foot
+    // flanks of the Flores + alley street cuts
+    this.hillMass(20.5, 22.3, -118, -88, 22 - T);
+    this.hillMass(31.7, 33.5, -118, -88, 22 - T);
+    this.hillMass(58, 60.2, -112, -84, 28 - T);
+    this.hillMass(69.8, 72, -112, -84, 28 - T);
+    // under L3 Terreiro da Sé (y28) — carries the cathedral
+    this.hillMass(52, 119, -88, -27, 28 - T);
+
     // sea walls / play bounds (invisible)
     this.solid(-118, -114, -4, 40, -60, 40);   // west
     this.solid(98, 102, -4, 12, -20, 32);      // east end of quay (below codeçal massif)
@@ -442,6 +482,18 @@ export class World {
     this.solid(-24, -20, 16, 36, -156, -104);  // west of plaza
     this.solid(114, 120, 24, 44, -90, -24);    // east of Sé terrace
     this.solid(51, 55, 24, 44, -88, -26);      // west edge of Sé terrace
+  }
+
+  // solid hillside block filling the volume under an elevated terrace
+  hillMass(x1, x2, z1, z2, yTop, yBottom = -3) {
+    const h = yTop - yBottom;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(x2 - x1, h, z2 - z1), this.mats.hillside);
+    m.position.set((x1 + x2) / 2, yBottom + h / 2, (z1 + z2) / 2);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    this.scene.add(m);
+    this.occluders.push(m);
+    return m;
   }
 
   // stepped granite mass under a street ramp so its underside is never open air

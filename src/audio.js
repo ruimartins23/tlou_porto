@@ -7,6 +7,9 @@ export class GameAudio {
     this.heartbeatOn = false;
     this.heartT = 0;
     this.crowT = 8;
+    this.listener = null;     // camera, set by main — for positional audio
+    this.maxAudible = 60;
+    this._dest = null;        // temp routing target for the current play() call
   }
 
   init() {
@@ -14,7 +17,7 @@ export class GameAudio {
     const AC = window.AudioContext || window.webkitAudioContext;
     this.ctx = new AC();
     this.master = this.ctx.createGain();
-    this.master.gain.value = 0.55;
+    this.master.gain.value = 0.68;
     this.master.connect(this.ctx.destination);
     this.startAmbience();
   }
@@ -85,7 +88,7 @@ export class GameAudio {
     g.gain.setValueAtTime(0, t);
     g.gain.linearRampToValueAtTime(gainV, t + 0.012);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    osc.connect(g).connect(this.master);
+    osc.connect(g).connect(this._dest || this.master);
     osc.start(t);
     osc.stop(t + dur + 0.05);
   }
@@ -100,9 +103,26 @@ export class GameAudio {
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(gainV, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(filt).connect(g).connect(this.master);
+    src.connect(filt).connect(g).connect(this._dest || this.master);
     src.start(t);
     src.stop(t + dur + 0.1);
+  }
+
+  // build a stereo-panned, distance-attenuated routing node for a world position
+  spatialDest(pos) {
+    if (!pos || !this.listener || !this.ctx.createStereoPanner) return null;
+    const cp = this.listener.position;
+    const dx = pos.x - cp.x, dy = pos.y - cp.y, dz = pos.z - cp.z;
+    const dist = Math.hypot(dx, dy, dz) || 0.001;
+    if (dist > this.maxAudible) return 'silent';
+    const gn = this.ctx.createGain();
+    gn.gain.value = Math.pow(1 - dist / this.maxAudible, 1.5);
+    const e = this.listener.matrixWorld.elements; // camera right vector = column 0
+    const pan = Math.max(-1, Math.min(1, (dx * e[0] + dy * e[1] + dz * e[2]) / dist));
+    const sp = this.ctx.createStereoPanner();
+    sp.pan.value = pan;
+    sp.connect(gn).connect(this.master);
+    return sp;
   }
 
   crowCry() {
@@ -132,11 +152,44 @@ export class GameAudio {
 
   setHeartbeat(on) { this.heartbeatOn = on; }
 
-  play(name) {
+  play(name, pos = null) {
     if (!this.ctx) return;
+    if (pos) {
+      const dest = this.spatialDest(pos);
+      if (dest === 'silent') return;   // too far to hear
+      this._dest = dest;
+    }
+    try {
+      this._playInner(name);
+    } finally {
+      this._dest = null;
+    }
+  }
+
+  _playInner(name) {
     switch (name) {
       case 'step':
-        this.noiseBurst(0.09, 0.055 + Math.random() * 0.03, 280 + Math.random() * 140);
+        this.noiseBurst(0.09, 0.05 + Math.random() * 0.03, 280 + Math.random() * 140);
+        this.blip(70 + Math.random() * 20, 0.05, 0.02, 'sine');
+        break;
+      case 'stepRun':
+        // heavier, louder — a real footfall you (and the infected) can hear
+        this.noiseBurst(0.12, 0.11 + Math.random() * 0.04, 340 + Math.random() * 160);
+        this.blip(58 + Math.random() * 22, 0.09, 0.06, 'sine', 0, 42);
+        break;
+      case 'land':
+        this.noiseBurst(0.16, 0.16, 240);
+        this.blip(52, 0.12, 0.1, 'sine', 0, 34);
+        break;
+      case 'stepInfected':
+        // wet, dragging shuffle
+        this.noiseBurst(0.14, 0.05, 500, 0, 'bandpass');
+        this.blip(60, 0.08, 0.03, 'sawtooth', 0, 40);
+        break;
+      case 'stepBoot':
+        // scavenger's hard boot on stone
+        this.noiseBurst(0.07, 0.06, 900, 0, 'bandpass');
+        this.blip(90, 0.05, 0.035, 'square', 0, 60);
         break;
       case 'pickup':
         this.blip(620, 0.16, 0.05);
@@ -165,7 +218,9 @@ export class GameAudio {
         this.blip(90, 0.12, 0.09, 'triangle');
         break;
       case 'swing':
-        this.noiseBurst(0.14, 0.06, 2400, 0, 'bandpass');
+        // a real whoosh — air moving past the plank
+        this.noiseBurst(0.16, 0.14, 1700, 0, 'bandpass');
+        this.blip(320, 0.12, 0.05, 'sine', 0, 120);
         break;
       case 'revolverFire':
         // sharp crack + low thump + tail
@@ -196,8 +251,39 @@ export class GameAudio {
         this.noiseBurst(0.04, 0.04, 2000, 0, 'bandpass');
         break;
       case 'hitFlesh':
-        this.noiseBurst(0.09, 0.16, 500);
-        this.blip(110, 0.1, 0.08, 'triangle', 0.01);
+        this.noiseBurst(0.1, 0.22, 520);
+        this.blip(120, 0.12, 0.12, 'triangle', 0.01, 70);
+        break;
+      case 'meleeHit':
+        // plank meeting body: a heavy wet thwack with a woody crack on top
+        this.noiseBurst(0.12, 0.34, 430);
+        this.blip(95, 0.16, 0.2, 'triangle', 0, 55);
+        this.noiseBurst(0.05, 0.22, 2600, 0, 'bandpass'); // the wood
+        break;
+      case 'meleeConnect':
+        // crisp confirm tick that cuts through — the "you hit it" cue
+        this.blip(1500, 0.03, 0.12, 'square', 0, 900);
+        this.blip(760, 0.05, 0.08, 'square', 0.02);
+        break;
+      case 'stepCrouch':
+        this.noiseBurst(0.07, 0.02, 220);
+        break;
+      case 'focusIn':
+        // a held breath — the world narrowing to a heartbeat
+        this.blip(140, 0.6, 0.06, 'sine', 0, 70);
+        this.noiseBurst(0.5, 0.035, 260, 0, 'lowpass');
+        break;
+      case 'molotov':
+        // glass shatter → whoosh of ignition → a crackling tail
+        this.noiseBurst(0.06, 0.34, 4200, 0, 'highpass');
+        this.blip(2400, 0.04, 0.09, 'square', 0, 800);
+        this.noiseBurst(0.55, 0.3, 850, 0.03);
+        this.noiseBurst(1.3, 0.12, 1500, 0.12, 'bandpass');
+        break;
+      case 'craft':
+        // parts coming together — a scrape of cloth/metal, then a soft settling click
+        this.noiseBurst(0.16, 0.05, 1300, 0, 'bandpass');
+        this.blip(520, 0.07, 0.05, 'triangle', 0.07, 360);
         break;
       case 'takedown':
         // muffled struggle + wet crunch, quiet so it stays stealthy
@@ -217,25 +303,57 @@ export class GameAudio {
         this.noiseBurst(0.5, 0.2, 700);
         break;
       case 'errante': {
-        // wet groan
-        const f = 90 + Math.random() * 50;
-        this.blip(f, 0.7, 0.045, 'sawtooth', 0, f * 0.6);
-        this.noiseBurst(0.5, 0.02, 400, 0.05);
+        // wet, guttural groan — layered, rasping, much more present
+        const f = 82 + Math.random() * 44;
+        this.blip(f, 0.85, 0.16, 'sawtooth', 0, f * 0.55);
+        this.blip(f * 1.5, 0.6, 0.07, 'sawtooth', 0.05, f * 0.9);
+        this.noiseBurst(0.7, 0.11, 520, 0.02);       // breath rasp
+        this.noiseBurst(0.25, 0.06, 1600, 0.4, 'bandpass'); // wet gurgle tail
         break;
       }
       case 'eco': {
-        // signature echolocation clicks
-        const k = 4 + Math.floor(Math.random() * 4);
+        // signature echolocation clicks — sharp, loud, unmistakable
+        const k = 5 + Math.floor(Math.random() * 4);
         for (let i = 0; i < k; i++) {
-          this.noiseBurst(0.03, 0.09, 2600 + Math.random() * 800, i * (0.07 + Math.random() * 0.03), 'bandpass');
+          this.noiseBurst(0.025, 0.2, 3000 + Math.random() * 900, i * (0.06 + Math.random() * 0.03), 'bandpass');
         }
-        this.blip(160, 0.4, 0.03, 'sawtooth', k * 0.08, 90);
+        this.blip(150, 0.5, 0.08, 'sawtooth', k * 0.07, 78); // rattling exhale
+        this.noiseBurst(0.4, 0.05, 700, k * 0.07);
         break;
       }
-      case 'corvo':
-        this.blip(240, 0.12, 0.02, 'square', 0, 200); // whistle-ish signal between scavengers
-        this.blip(320, 0.14, 0.018, 'square', 0.2, 260);
+      case 'corvo': {
+        // scavengers muttering / calling to each other
+        const words = 2 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < words; i++) {
+          const base = 130 + Math.random() * 70;
+          this.blip(base, 0.14, 0.09, 'sawtooth', i * 0.22, base * 1.3);
+          this.blip(base * 2.2, 0.1, 0.03, 'square', i * 0.22 + 0.02);
+        }
         break;
+      }
+      case 'chaseRoar': {
+        // infected has locked on — a rising shriek, loud and awful
+        this.blip(120, 0.6, 0.22, 'sawtooth', 0, 620);
+        this.blip(200, 0.55, 0.14, 'sawtooth', 0.03, 900);
+        this.noiseBurst(0.5, 0.16, 1800, 0.05);
+        this.noiseBurst(0.35, 0.1, 3200, 0.1, 'highpass');
+        break;
+      }
+      case 'corvoAlert': {
+        // human shout — "ALI! APANHA-A!"
+        this.blip(180, 0.22, 0.16, 'sawtooth', 0, 260);
+        this.blip(150, 0.26, 0.14, 'sawtooth', 0.26, 210);
+        this.blip(240, 0.2, 0.1, 'square', 0.5, 300);
+        break;
+      }
+      case 'corvoShot': {
+        // a Corvo's old rifle — flatter, drier crack than yours, with a slap-back
+        this.noiseBurst(0.035, 0.4, 4200, 0, 'highpass');
+        this.noiseBurst(0.1, 0.32, 1000);
+        this.blip(100, 0.1, 0.2, 'sawtooth', 0, 52);
+        this.noiseBurst(0.4, 0.05, 550, 0.06);
+        break;
+      }
       case 'attackSnarl':
         this.blip(140, 0.3, 0.09, 'sawtooth', 0, 70);
         this.noiseBurst(0.25, 0.09, 1100, 0.02);

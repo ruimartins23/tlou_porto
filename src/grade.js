@@ -13,6 +13,7 @@ export const CinemaGrade = {
     uSaturation: { value: 0.94 },
     uGrain: { value: 0.045 },
     uLift: { value: 0.0 },
+    uListen: { value: 0.0 },   // focus / listen-mode blend 0..1
   },
   vertexShader: /* glsl */`
     varying vec2 vUv;
@@ -30,6 +31,7 @@ export const CinemaGrade = {
     uniform float uSaturation;
     uniform float uGrain;
     uniform float uLift;
+    uniform float uListen;
     varying vec2 vUv;
 
     float hash(vec2 p) {
@@ -65,6 +67,16 @@ export const CinemaGrade = {
       // animated film grain, stronger in the dark
       float g = hash(vUv * uResolution + fract(uTime) * 431.0) - 0.5;
       col += g * uGrain * (1.2 - luma);
+
+      // listen / focus mode: drain colour to a cold, hushed monochrome that breathes
+      if (uListen > 0.001) {
+        float lum2 = dot(col, vec3(0.299, 0.587, 0.114));
+        lum2 = pow(lum2, 1.35) * 0.82;                      // pull it down — moody, not washed out
+        vec3 focus = vec3(lum2) * vec3(0.44, 0.58, 0.82);   // desaturated cold blue
+        focus *= 0.84 + 0.16 * sin(uTime * 3.4);            // subtle breathing pulse
+        focus *= mix(1.0, vig, 0.7);                        // heavier vignette while focused
+        col = mix(col, focus, uListen);
+      }
 
       gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
     }

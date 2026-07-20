@@ -9,12 +9,40 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { CinemaGrade } from './grade.js';
 import { World } from './world.js';
 import { buildDistricts } from './districts.js';
-import { Player } from './player.js';
+import { Player, RECIPES } from './player.js';
 import { Story } from './story.js';
 import { Enemy, Follower } from './characters.js';
 import { WeaponSystem } from './weapons.js';
 import { GameAudio } from './audio.js';
 import { UI } from './ui.js';
+import { Lang, setLang, tr, UI_TEXT } from './lang.js';
+
+// ---------------------------------------------------------------- localization
+const CONTROLS = {
+  title: {
+    en: '<b>W A S D</b> move &nbsp; <b>Shift</b> run &nbsp; <b>C</b> <span style="color:#c8b06a">crouch</span> &nbsp; <b>V</b> <span style="color:#c8b06a">listen</span> &nbsp; <b>Mouse</b> look &nbsp; <b>L-Click</b> attack / fire &nbsp; <b>R-Click</b> aim &nbsp; <b>1 2 3</b> weapons<br><b>E</b> interact / <span style="color:#c8b06a">stealth takedown</span> &nbsp; <b>R</b> reload &nbsp; <b>Q</b> brick &nbsp; <b>G</b> molotov &nbsp; <b>H</b> bandage &nbsp; <b>F</b> torch &nbsp; <b>J</b> notebook &nbsp; <b>X</b> craft &nbsp; <b>Esc</b> pause',
+    pt: '<b>W A S D</b> mover &nbsp; <b>Shift</b> correr &nbsp; <b>C</b> <span style="color:#c8b06a">agachar</span> &nbsp; <b>V</b> <span style="color:#c8b06a">escutar</span> &nbsp; <b>Rato</b> olhar &nbsp; <b>Clique-Esq</b> atacar / disparar &nbsp; <b>Clique-Dir</b> mirar &nbsp; <b>1 2 3</b> armas<br><b>E</b> interagir / <span style="color:#c8b06a">execução furtiva</span> &nbsp; <b>R</b> recarregar &nbsp; <b>Q</b> tijolo &nbsp; <b>G</b> molotov &nbsp; <b>H</b> ligadura &nbsp; <b>F</b> lanterna &nbsp; <b>J</b> caderno &nbsp; <b>X</b> fabricar &nbsp; <b>Esc</b> pausa',
+  },
+  pause: {
+    en: '<b>W A S D</b> move &nbsp; <b>Shift</b> run &nbsp; <b>C</b> crouch &nbsp; <b>V</b> listen &nbsp; <b>L-Click</b> attack / fire &nbsp; <b>R-Click</b> aim &nbsp; <b>1 2 3</b> weapons &nbsp; <b>R</b> reload &nbsp; <b>E</b> interact / takedown<br><b>Q</b> brick &nbsp; <b>G</b> molotov &nbsp; <b>H</b> bandage &nbsp; <b>F</b> torch &nbsp; <b>X</b> craft &nbsp; <b>J</b> notebook',
+    pt: '<b>W A S D</b> mover &nbsp; <b>Shift</b> correr &nbsp; <b>C</b> agachar &nbsp; <b>V</b> escutar &nbsp; <b>Clique-Esq</b> atacar / disparar &nbsp; <b>Clique-Dir</b> mirar &nbsp; <b>1 2 3</b> armas &nbsp; <b>R</b> recarregar &nbsp; <b>E</b> interagir / execução<br><b>Q</b> tijolo &nbsp; <b>G</b> molotov &nbsp; <b>H</b> ligadura &nbsp; <b>F</b> lanterna &nbsp; <b>X</b> fabricar &nbsp; <b>J</b> caderno',
+  },
+};
+
+function applyStaticLang() {
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    const key = el.getAttribute('data-i18n');
+    if (UI_TEXT[key]) el.textContent = tr(UI_TEXT[key]);
+  });
+  const th = document.getElementById('controls-hint-title');
+  const ph = document.getElementById('controls-hint-pause');
+  if (th) th.innerHTML = CONTROLS.title[Lang.cur];
+  if (ph) ph.innerHTML = CONTROLS.pause[Lang.cur];
+  const lb = document.getElementById('btn-lang');
+  if (lb) lb.textContent = tr(UI_TEXT.langLabel);
+  const wr = document.getElementById('weapon-reload');
+  if (wr) wr.textContent = '[R] ' + tr(UI_TEXT.reload);
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -65,38 +93,77 @@ const weapons = new WeaponSystem(camera, world, audio, player);
 const story = new Story(scene, world, ui, audio, player, follower, weapons);
 
 // enemy roster — [type, waypoints[[x,y,z]...]]
-const HERD = { sightRange: 9, fovCos: Math.cos(THREE.MathUtils.degToRad(48)), hearWalk: 2.8, hearRun: 14, chaseSpeed: 4.1, speed: 0.65 };
+const HERD = { sightRange: 9, fovCos: Math.cos(THREE.MathUtils.degToRad(48)), hearWalk: 3.2, hearRun: 16, chaseSpeed: 5.5, speed: 0.7 };
 const enemies = [
-  // the climb
+  // Ribeira quay — first contact, a lone stalker among the wrecks
+  new Enemy(scene, world, 'errante', [[-24, 0, 18], [-40, 0, 22], [-16, 0, 14]], audio),
+  // the climb — São João & the Largo (a small pack)
   new Enemy(scene, world, 'errante', [[11, 5, -36], [12, 8.5, -48]], audio),
   new Enemy(scene, world, 'errante', [[-5, 12, -70], [20, 12, -80], [8, 12, -62]], audio),
   new Enemy(scene, world, 'errante', [[32, 12, -64], [-14, 12, -66]], audio),
-  // São Bento hall — ecos
+  new Enemy(scene, world, 'errante', [[24, 12, -84], [-2, 12, -58]], audio),
+  new Enemy(scene, world, 'errante', [[4, 12, -74], [30, 12, -72]], audio),   // Largo — added
+  new Enemy(scene, world, 'errante', [[16, 12, -56], [-8, 12, -78]], audio),  // Largo — added
+  // Rua das Flores approach
+  new Enemy(scene, world, 'errante', [[27, 17, -100], [27, 20, -112]], audio),
+  new Enemy(scene, world, 'errante', [[20, 15, -98], [30, 18, -106]], audio), // Flores — added
+  // São Bento hall — a nest of ecos (blind, lethal; sound-stealth or die)
   new Enemy(scene, world, 'eco', [[60, 22, -140], [80, 22, -122], [68, 22, -134]], audio),
   new Enemy(scene, world, 'eco', [[72, 22, -116], [56, 22, -128]], audio),
-  // the Corvos at the Sé
+  new Enemy(scene, world, 'eco', [[84, 22, -138], [64, 22, -146]], audio),
+  new Enemy(scene, world, 'eco', [[52, 22, -120], [88, 22, -128]], audio),
+  new Enemy(scene, world, 'eco', [[76, 22, -144], [62, 22, -124]], audio),    // São Bento — added
+  // the Corvos hold the Sé — a coordinated gang
   new Enemy(scene, world, 'corvo', [[64, 28, -52], [80, 28, -68]], audio),
   new Enemy(scene, world, 'corvo', [[88, 28, -44], [70, 28, -38]], audio),
-  new Enemy(scene, world, 'corvo', [[64, 28, -74]], audio),
+  new Enemy(scene, world, 'corvo', [[64, 28, -74], [92, 28, -60]], audio),
+  new Enemy(scene, world, 'corvo', [[76, 28, -80], [60, 28, -42]], audio),
+  new Enemy(scene, world, 'corvo', [[96, 28, -50]], audio),
+  new Enemy(scene, world, 'corvo', [[84, 28, -76], [68, 28, -50]], audio),    // Sé — added
+  new Enemy(scene, world, 'corvo', [[58, 28, -66], [90, 28, -70]], audio),    // Sé — added
   // the herd on the bridge — dormant shamblers: near-blind, slow to rouse,
-  // but running wakes the whole deck
+  // but running wakes the whole deck, and roused they surge
   new Enemy(scene, world, 'errante', [[111, 6, 30], [111, 6, 62]], audio, HERD),
   new Enemy(scene, world, 'errante', [[118, 6, 46], [113, 6, 82]], audio, HERD),
   new Enemy(scene, world, 'errante', [[112, 6, 92], [117, 6, 58]], audio, HERD),
   new Enemy(scene, world, 'errante', [[116, 6, 22], [111, 6, 76]], audio, HERD),
-  // gaia straggler
+  new Enemy(scene, world, 'errante', [[114, 6, 50], [120, 6, 38]], audio, HERD),
+  new Enemy(scene, world, 'errante', [[112, 6, 70], [116, 6, 100]], audio, HERD),
+  new Enemy(scene, world, 'errante', [[117, 6, 34], [110, 6, 66]], audio, HERD),  // added
+  new Enemy(scene, world, 'errante', [[110, 6, 88], [118, 6, 54]], audio, HERD),  // added
+  new Enemy(scene, world, 'errante', [[115, 6, 106], [113, 6, 44]], audio, HERD), // added
+  // Gaia bank — stragglers between you and the caves
   new Enemy(scene, world, 'errante', [[94, 0, 112], [72, 0, 108]], audio),
+  new Enemy(scene, world, 'errante', [[40, 0, 116], [20, 0, 110]], audio),
 ];
+// a Corvo gunshot is loud — it wakes every infected in earshot too
+for (const e of enemies) e.onGunNoise = (pos, radius) => { for (const o of enemies) o.hearNoise(pos, radius); };
+// spotting the player rallies nearby allies: a Corvo who sees you shouts and the gang
+// converges; a roused infected draws the ones around it. They swarm the last-known spot.
+for (const e of enemies) e.onSpotted = (pos, type) => {
+  const radius = type === 'corvo' ? 30 : 18;
+  for (const o of enemies) {
+    if (o !== e && o.type === type && !o.dead) o.hearNoise(pos, radius);
+  }
+};
+// keep the shelter safe: nothing hunts you until you step out into the city (stage 1)
+let combatArmed = false;
+for (const e of enemies) e.setActive(false);
 
+let listening = false;
+const LISTEN_RANGE = 30;   // how far focus senses the infected
 let paused = false;
 let ended = false;
 let started = false;
 let dead = false;
 let journalOpen = false;
+let craftOpen = false;
 
-player.uiBlocked = () => ui.dialogueActive || paused || journalOpen || dead;
+player.uiBlocked = () => ui.dialogueActive || paused || journalOpen || craftOpen || dead;
 player.onBrickLand = (pos) => { for (const e of enemies) e.hearNoise(pos, 17); };
-player.onSplash = () => ui.toast('The Douro grips like a fist. You haul out, soaked and loud — too loud.');
+// a molotov shattering is loud and bright — it draws the whole block
+player.onMolotovLand = (pos) => { for (const e of enemies) e.hearNoise(pos, 28); };
+player.onSplash = () => ui.toast({ en: 'The Douro grips like a fist. You haul out, soaked and loud — too loud.', pt: 'O Douro agarra como um punho. Sais a custo, encharcada e barulhenta — barulhenta de mais.' });
 
 // weapons wiring
 weapons.enemies = enemies;
@@ -105,6 +172,11 @@ weapons.onHudChange = () => ui.setWeapon(weapons);
 
 story.onStageChange = (n) => {
   audio.setDrone(n === 4 || n === 6);
+  // arm the city the moment you leave the shelter — no cheap deaths mid-prologue
+  if (n >= 1 && !combatArmed) {
+    combatArmed = true;
+    for (const e of enemies) if (!e.dead) e.setActive(true);
+  }
 };
 story.onGameEnd = (text) => {
   ended = true;
@@ -131,13 +203,50 @@ function findTakedownTarget() {
   return best;
 }
 
+// a shiv lets you kill anything up close — even alert, even face-to-face (great vs the blind
+// ecos and cornered Corvos). Only offered when a free takedown isn't already available.
+function findShivTarget() {
+  if (player.shivs <= 0) return null;
+  let best = null, bestD = Infinity;
+  for (const en of enemies) {
+    if (!en.active || en.dead) continue;
+    if (en.takedownReady(player.position)) continue;   // free takedown wins
+    const d = Math.hypot(en.group.position.x - player.position.x, en.group.position.z - player.position.z);
+    if (d < 2.1 && Math.abs(en.group.position.y - player.position.y) < 2 && d < bestD) { bestD = d; best = en; }
+  }
+  return best;
+}
+
 function doTakedown(target) {
   target.silentKill();
   player.frozen = true;
   ui.toast(target.type === 'corvo'
-    ? 'You take him from behind — a hand over the mouth, and it is done. No shot, no shout.'
-    : 'You drive the blade home before it can click. Silence holds.');
+    ? { en: 'You take him from behind — a hand over the mouth, and it is done. No shot, no shout.', pt: 'Apanha-lo por trás — uma mão na boca, e está feito. Sem tiro, sem grito.' }
+    : { en: 'You drive the blade home before it can click. Silence holds.', pt: 'Cravas a lâmina antes que ele consiga estalar. O silêncio aguenta-se.' });
   setTimeout(() => { player.frozen = false; }, 380);
+}
+
+function doShivKill(target) {
+  player.shivs--;
+  target.silentKill();
+  ui.setShivs(player.shivs);
+  player.frozen = true;
+  ui.toast(target.type === 'eco'
+    ? { en: 'The shiv goes in before it can screech. It folds without a sound.', pt: 'A navalha entra antes que ele guinche. Dobra-se sem um som.' }
+    : { en: 'No angle, no time — just the shiv, quick and final.', pt: 'Sem ângulo, sem tempo — só a navalha, rápida e final.' });
+  setTimeout(() => { player.frozen = false; }, 380);
+}
+
+// craft recipe #i from the open menu
+function tryCraft(i) {
+  const r = RECIPES[i];
+  if (r && player.craft(r.id)) {
+    ui.renderCraft(player);
+    ui.setSupplies(player.bandages, player.bricks, player.molotovs);
+    ui.setShivs(player.shivs);
+  } else {
+    audio.play('click');   // nothing to build with — soft feedback
+  }
 }
 
 document.addEventListener('keydown', (e) => {
@@ -150,26 +259,38 @@ document.addEventListener('keydown', (e) => {
     }
     const td = findTakedownTarget();
     if (td) { doTakedown(td); return; }
+    const sv = findShivTarget();
+    if (sv) { doShivKill(sv); return; }
     const it = story.currentInteractable(player.position, player.forward());
     if (it) it.action();
   } else if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') {
     const n = Number(e.code.slice(-1));
     if (ui.dialogueActive && ui.choiceMode) { ui.pickChoice(n - 1); return; }
+    if (craftOpen) { tryCraft(n - 1); return; }        // in the craft menu, 1/2/3 build
     if (!ui.dialogueActive) weapons.switchTo(['plank', 'revolver', 'shotgun'][n - 1]);
   } else if (e.code === 'KeyR') {
     if (!ui.dialogueActive && weapons.reload()) ui.setWeapon(weapons);
+  } else if (e.code === 'KeyX') {
+    // crafting menu — only with full control (not mid-dialogue/pause)
+    if (craftOpen) { craftOpen = ui.toggleCraft(player, false); }
+    else if (player.canControl) { craftOpen = ui.toggleCraft(player, true); }
   } else if (e.code === 'KeyJ') {
     if (!ui.dialogueActive) journalOpen = ui.toggleJournal();
   } else if (e.code === 'KeyQ') {
     if (player.throwBrick(scene)) {
-      ui.setSupplies(player.bandages, player.bricks);
+      ui.setSupplies(player.bandages, player.bricks, player.molotovs);
       for (const en of enemies) en.hearNoise(player.position.clone(), 6); // the throw itself is a small sound
+    }
+  } else if (e.code === 'KeyG') {
+    if (player.throwMolotov(scene)) {
+      ui.setSupplies(player.bandages, player.bricks, player.molotovs);
+      for (const en of enemies) en.hearNoise(player.position.clone(), 6); // the throw itself
     }
   } else if (e.code === 'KeyH') {
     if (player.heal()) {
-      ui.setSupplies(player.bandages, player.bricks);
+      ui.setSupplies(player.bandages, player.bricks, player.molotovs);
       ui.setHealth(player.health, player.maxHealth);
-      ui.toast('You bind the wound tight. It will hold.');
+      ui.toast({ en: 'You bind the wound tight. It will hold.', pt: 'Apertas bem a ligadura. Vai aguentar.' });
     }
   } else if (e.code === 'KeyF') {
     player.setTorch(!player.torchOn);
@@ -209,19 +330,33 @@ document.addEventListener('pointerlockchange', () => {
 
 function setPaused(on) {
   paused = on;
+  if (on && craftOpen) craftOpen = ui.toggleCraft(player, false);  // Esc/blur closes the kit too
   $('pause-screen').classList.toggle('hidden', !on);
   if (!on) tryLockPointer();
 }
+
+// language toggle — flips EN/PT and re-renders every visible string live
+applyStaticLang();
+$('btn-lang').addEventListener('click', (e) => {
+  e.currentTarget.blur();
+  setLang(Lang.cur === 'en' ? 'pt' : 'en');
+  applyStaticLang();
+  ui.refreshObjective();
+  ui.renderJournal();
+  if (craftOpen) ui.renderCraft(player);
+});
 
 $('btn-start').addEventListener('click', (e) => {
   e.currentTarget.blur();
   started = true;
   audio.init();
   audio.resume();
+  audio.listener = camera; // positional audio: pan/attenuate by enemy world position
   $('title-screen').classList.add('hidden');
   ui.showHud();
   ui.setHealth(player.health, player.maxHealth);
-  ui.setSupplies(player.bandages, player.bricks);
+  ui.setSupplies(player.bandages, player.bricks, player.molotovs);
+  ui.setShivs(player.shivs);
   ui.setWeapon(weapons);
   tryLockPointer();
   player.enabled = true;
@@ -245,14 +380,18 @@ function onPlayerDeath() {
   if (dead) return;
   dead = true;
   weapons.aiming = false;
+  // drop focus mode cleanly
+  listening = false; player.focusing = false;
+  grade.uniforms.uListen.value = 0;
+  for (const e of enemies) e.setGhost(false);
   story.onDeath();
   ui.fade(true);
   document.exitPointerLock?.();
   setTimeout(() => {
     $('death-screen').classList.remove('hidden');
     $('death-sub').textContent = story.stage >= 6
-      ? 'the herd closes over you — the far bank stays a rumor'
-      : 'the ash takes you — Beatriz\'s footsteps fade uphill, alone';
+      ? tr({ en: 'the herd closes over you — the far bank stays a rumor', pt: 'a horda fecha-se sobre ti — a outra margem fica um boato' })
+      : tr({ en: 'the ash takes you — Beatriz\'s footsteps fade uphill, alone', pt: 'a cinza leva-te — os passos da Beatriz somem-se pela subida, sozinha' });
   }, 900);
 }
 
@@ -268,6 +407,14 @@ function frame() {
 
   if (started && !ended && !dead) {
     if (!paused) {
+      // listen mode (hold V) — focus to sense the infected through walls; roots you to a creep
+      const wasListening = listening;
+      listening = (!!player.keys['KeyV'] || window.__forceListen) && player.canControl;
+      player.focusing = listening;
+      if (listening && !wasListening) audio.play('focusIn');
+      grade.uniforms.uListen.value += ((listening ? 0.9 : 0) - grade.uniforms.uListen.value) * Math.min(1, dt * 7);
+      const pulse = 0.5 + 0.5 * Math.sin(t * 5);
+
       player.update(dt, scene, enemies);
       weapons.update(dt, player.moving, player.running);
       story.update(t, dt, player.position);
@@ -284,10 +431,11 @@ function frame() {
         if (e.dead) {
           if (e.type === 'corvo') deadCorvos++; else deadInfected++;
           if (e.deathT < 2) e.update(dt, t, player.position, false, false, () => {});
+          e.setGhost(false);
           continue;
         }
-        if (d > 85) continue; // too far to matter this frame
-        e.perceiveSteps(player.position, player.running, player.moving, dt);
+        if (d > 85) { e.setGhost(false); continue; } // too far to matter this frame
+        e.perceiveSteps(player.position, player.running, player.moving, player.crouching, dt);
         e.update(dt, t, player.position, player.moving, player.running, (dmg) => {
           player.takeDamage(dmg);
           ui.flashDamage();
@@ -295,6 +443,13 @@ function frame() {
           if (player.health <= 0) onPlayerDeath();
         });
         if (d < 40) maxSuspicion = Math.max(maxSuspicion, e.suspicion >= 1 ? 0 : e.suspicion);
+        // reveal within focus range, coloured by how alert it is
+        if (listening && e.active && d < LISTEN_RANGE) {
+          const col = e.state === 'chase' ? 0xff4634 : (e.suspicion > 0.4 ? 0xffb648 : 0xcfe0ff);
+          e.setGhost(true, col, pulse);
+        } else {
+          e.setGhost(false);
+        }
       }
       story.infectedKilled = deadInfected;
       story.corvosKilled = deadCorvos;
@@ -311,11 +466,18 @@ function frame() {
       // prompt: stealth takedown takes priority over story interactions
       const td = findTakedownTarget();
       if (td) {
-        ui.prompt('Silent takedown', 'E');
+        ui.prompt({ en: 'Silent takedown', pt: 'Execução silenciosa' }, 'E');
+      } else if (findShivTarget()) {
+        ui.prompt({ en: 'Shiv kill', pt: 'Matar com a navalha' }, 'E');
       } else {
         const it = story.currentInteractable(player.position, player.forward());
         ui.prompt(it ? it.prompt : null);
       }
+      // crosshair tells you when the plank will actually connect
+      ui.setMeleeReady(weapons.meleeReady());
+      ui.setCrouched(player.crouching);
+      ui.setListening(listening);
+      ui.setStamina(player.stamina, player.maxStamina, player.staminaLock);
       ui.updateMarker(camera, story.markerTarget(), player.position);
     }
   } else if (!started) {
@@ -341,4 +503,4 @@ let fpsFrames = 0, fpsLast = performance.now(), fpsValue = 0;
 frame();
 
 // Debug/testing hooks
-window.__game = { player, story, world, enemies, follower, weapons, ui, camera, scene, audio, getFps: () => fpsValue };
+window.__game = { player, story, world, enemies, follower, weapons, ui, camera, scene, audio, grade, getFps: () => fpsValue };

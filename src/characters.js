@@ -106,20 +106,22 @@ export class NPC {
   }
 }
 
+// Player runs at 7.0. Chasers are just under that — you *can* escape a clean sprint,
+// but sprinting is loud and wakes everything, so fleeing rarely ends well (TLOU balance).
 const CONFIG = {
-  errante: {
-    speed: 0.9, chaseSpeed: 4.6, hp: 100, damage: 20, attackRange: 1.5, attackCooldown: 1.3,
-    sightRange: 17, fovCos: Math.cos(THREE.MathUtils.degToRad(62)), hearRun: 13, hearWalk: 4.5,
+  errante: {   // runner: fast, sees you, swarms
+    speed: 1.0, chaseSpeed: 6.2, hp: 90, damage: 26, attackRange: 1.6, attackCooldown: 1.0,
+    sightRange: 21, fovCos: Math.cos(THREE.MathUtils.degToRad(62)), hearRun: 17, hearWalk: 3.3, hearCrouch: 1.2,
     growl: 'errante',
   },
-  eco: {
-    speed: 0.7, chaseSpeed: 5.4, hp: 130, damage: 38, attackRange: 1.5, attackCooldown: 1.5,
-    sightRange: 0, fovCos: 2, hearRun: 17, hearWalk: 6.5,
+  eco: {       // clicker: blind but lethal — two hits and you're gone; sound is everything
+    speed: 0.8, chaseSpeed: 6.6, hp: 160, damage: 72, attackRange: 1.6, attackCooldown: 1.3,
+    sightRange: 0, fovCos: 2, hearRun: 26, hearWalk: 7, hearCrouch: 2.6,
     growl: 'eco',
   },
-  corvo: {
-    speed: 1.6, chaseSpeed: 4.9, hp: 70, damage: 15, attackRange: 1.6, attackCooldown: 1.1,
-    sightRange: 22, fovCos: Math.cos(THREE.MathUtils.degToRad(55)), hearRun: 12, hearWalk: 5,
+  corvo: {     // scavenger: coordinated, hits hard, flanks
+    speed: 1.7, chaseSpeed: 5.9, hp: 70, damage: 22, attackRange: 1.7, attackCooldown: 0.95,
+    sightRange: 27, fovCos: Math.cos(THREE.MathUtils.degToRad(56)), hearRun: 15, hearWalk: 3.3, hearCrouch: 1.2,
     growl: 'corvo',
   },
 };
@@ -153,17 +155,73 @@ export class Enemy {
     this.dead = false;
     this.deathT = 0;
     this.ray = new THREE.Raycaster();
+
+    // cover-combat state (Corvos)
+    this.myCover = null;
+    this.coverT = 0;
+    this.coverHold = 3 + Math.random() * 3;
+    this.shootT = 1 + Math.random();
+    this.crouch = 0;        // 0 stand .. 1 crouched
+    this.peekT = 0;
+    this.onGunNoise = null; // set by main — a Corvo shot wakes the infected too
+    if (type === 'corvo') {
+      this.cfg = { ...this.cfg, shootRange: 32, shootDamage: 11, shootCooldown: 1.7 };
+      // muzzle flash for this Corvo's gun
+      this.muzzle = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: world.emberTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0,
+      }));
+      this.muzzle.scale.set(0.5, 0.5, 1);
+      this.muzzle.position.set(0.28, 1.15, 0.35);
+      this.group.add(this.muzzle);
+      this.muzzleLight = new THREE.PointLight(0xffb060, 0, 8, 2);
+      this.muzzleLight.position.set(0.28, 1.15, 0.4);
+      this.group.add(this.muzzleLight);
+    }
   }
 
   setActive(on) {
     this.active = on;
     this.group.visible = on;
+    if (!on && this.ghost) this.ghost.visible = false;
+  }
+
+  // ---- listen mode: a through-wall silhouette that reads the enemy's alert state ----
+  buildGhost() {
+    if (this.ghost) return;
+    this.ghostMat = new THREE.MeshBasicMaterial({
+      color: 0xdfe8ff, transparent: true, opacity: 0.4,
+      depthTest: false, depthWrite: false, fog: false,
+    });
+    this.ghost = this.group.clone(true);
+    const junk = [];
+    this.ghost.traverse((o) => {
+      if (o.isMesh) { o.material = this.ghostMat; o.renderOrder = 998; o.castShadow = o.receiveShadow = false; }
+      else if (o.isLight || o.isSprite) junk.push(o);
+    });
+    junk.forEach((o) => o.parent && o.parent.remove(o));  // no cloned lights/flashes
+    this.ghost.visible = false;
+    this.world.scene.add(this.ghost);
+  }
+
+  setGhost(on, color = 0xdfe8ff, pulse = 1) {
+    if (!on || this.dead) { if (this.ghost) this.ghost.visible = false; return; }
+    this.buildGhost();
+    this.ghost.visible = true;
+    this.ghost.position.copy(this.group.position);
+    this.ghost.rotation.copy(this.group.rotation);
+    this.ghost.scale.copy(this.group.scale);
+    this.ghostMat.color.setHex(color);
+    this.ghostMat.opacity = 0.28 + 0.18 * pulse;
   }
 
   reset() {
     if (this.dead) return; // the dead stay dead across checkpoints
+    this.releaseCover();
     this.group.position.copy(this.home);
     this.group.rotation.set(0, 0, 0);
+    this.group.scale.y = 1;
+    this.crouch = 0;
+    this.crouchWanted = false;
     this.state = 'patrol';
     this.wpIndex = this.waypoints.length > 1 ? 1 : 0;
     this.suspicion = 0;
@@ -172,35 +230,47 @@ export class Enemy {
     this.stunT = 0;
   }
 
+  // begin (or refresh) a search of a spot — walk there, then sweep a couple of nearby points
+  startInvestigate(pos) {
+    this.noiseTarget = pos ? pos.clone() : this.group.position.clone();
+    if (this.state !== 'chase') {
+      this.state = 'investigate';
+      this.investigateT = 0;
+      this.searchHops = 0;
+      this.searchLookT = 0;
+    }
+  }
+
   // point noise burst (brick impact, loud events)
   hearNoise(pos, radius = 18) {
     if (!this.active || this.dead || this.stunT > 0) return;
     if (this.group.position.distanceTo(pos) < radius) {
-      this.noiseTarget = pos.clone();
       if (this.state !== 'chase') {
-        this.state = 'investigate';
-        this.investigateT = 0;
         this.suspicion = Math.max(this.suspicion, 0.6);
+        this.startInvestigate(pos);
+      } else {
+        this.noiseTarget = pos.clone();
       }
     }
   }
 
   // continuous player noise (footsteps) — called every frame from main
-  perceiveSteps(playerPos, running, moving, dt) {
+  perceiveSteps(playerPos, running, moving, crouching, dt) {
     if (!this.active || this.dead || this.stunT > 0 || !moving) return;
     const d = this.group.position.distanceTo(playerPos);
-    const range = running ? this.cfg.hearRun : this.cfg.hearWalk;
+    const range = running ? this.cfg.hearRun
+      : crouching ? (this.cfg.hearCrouch ?? 1.2)
+      : this.cfg.hearWalk;
     if (d < range) {
       const closeness = 1 - d / range;
       this.suspicion = Math.min(1, this.suspicion + (0.5 + closeness * 1.6) * dt);
       if (this.suspicion > 0.55) {
-        this.noiseTarget = playerPos.clone();
         if (this.suspicion >= 1) {
+          this.noiseTarget = playerPos.clone();
           this.state = 'chase';
           this.lastSeenT = 0;
         } else if (this.state === 'patrol' || this.state === 'wait') {
-          this.state = 'investigate';
-          this.investigateT = 0;
+          this.startInvestigate(playerPos);
         }
       }
     }
@@ -256,23 +326,28 @@ export class Enemy {
     return false;
   }
 
-  takeHit(dmg, fromDir, { stun = 0.4 } = {}) {
-    if (this.dead) return;
+  takeHit(dmg, fromDir, { stun = 0.4, melee = false, silent = false } = {}) {
+    if (this.dead) return false;
     this.hp -= dmg;
     this.stunT = Math.max(this.stunT, stun);
-    this.group.position.addScaledVector(fromDir, 0.45);
-    this.audio?.play('hitFlesh');
+    this.group.position.addScaledVector(fromDir, melee ? 0.32 : (silent ? 0.12 : 0.45));
+    this.flinchT = 0.18;          // visible recoil (read in update)
+    this.releaseCover?.();
+    if (!silent) this.audio?.play(melee ? 'meleeHit' : 'hitFlesh', this.group.position);
     if (this.hp <= 0) {
       this.dead = true;
       this.state = 'dead';
       this.deathT = 0;
-      this.audio?.play(this.type === 'corvo' ? 'manDown' : 'infectedDown');
+      this.audio?.play(this.type === 'corvo' ? 'manDown' : 'infectedDown', this.group.position);
+      return true;
     } else {
       // getting hit reveals the player
       this.state = 'chase';
       this.suspicion = 1;
       this.lastSeenT = 0;
+      this.noiseTarget = this.group.position.clone().addScaledVector(fromDir, -2);
     }
+    return false;
   }
 
   // silent stealth takedown — no death shout, no noise
@@ -288,18 +363,19 @@ export class Enemy {
   // is the player positioned for a stealth takedown? (behind/beside an unaware enemy)
   takedownReady(playerPos) {
     if (!this.active || this.dead || this.stunT > 0) return false;
-    if (this.state === 'chase' || this.suspicion > 0.6) return false;
+    if (this.state === 'chase' || this.suspicion > 0.85) return false; // forgiving: even a half-alert enemy can be taken
     const p = this.group.position;
     const dx = playerPos.x - p.x, dz = playerPos.z - p.z;
-    if (Math.hypot(dx, dz) > 2.4 || Math.abs(playerPos.y - p.y) > 2) return false;
+    if (Math.hypot(dx, dz) > 2.9 || Math.abs(playerPos.y - p.y) > 2) return false;
     const fwd = new THREE.Vector3(Math.sin(this.group.rotation.y), 0, Math.cos(this.group.rotation.y));
     const toPlayer = new THREE.Vector3(dx, 0, dz).normalize();
-    return fwd.dot(toPlayer) < 0.4; // player is not in front of the enemy
+    return fwd.dot(toPlayer) < 0.55; // player is behind/beside (not squarely in front)
   }
 
   update(dt, t, playerPos, playerMoving, playerRunning, onAttack) {
     if (!this.active) return;
     const p = this.group.position;
+    const sx = p.x, sz = p.z; // frame start — for footstep cadence
 
     if (this.dead) {
       this.deathT += dt;
@@ -310,35 +386,42 @@ export class Enemy {
     }
     if (this.stunT > 0) {
       this.stunT -= dt;
-      this.group.rotation.z = Math.sin(t * 30) * 0.06 * Math.min(1, this.stunT);
+      this.group.rotation.z = Math.sin(t * 34) * 0.07 * Math.min(1, this.stunT);
+      if (this.flinchT > 0) { this.flinchT -= dt; this.group.rotation.x = -this.flinchT * 2.2; }
+      else this.group.rotation.x = 0;
       return;
     }
     this.group.rotation.z = 0;
+    this.group.rotation.x = 0;
     this.attackT -= dt;
     this.lastSeenT += dt;
 
     // perception: sight
     const seen = this.canSee(playerPos);
     if (seen > 0) {
-      this.suspicion = Math.min(1, this.suspicion + (0.7 + seen * 1.8) * dt * (playerMoving ? 1.3 : 0.85));
+      this.suspicion = Math.min(1, this.suspicion + (1.0 + seen * 2.4) * dt * (playerMoving ? 1.4 : 0.9));
       if (this.suspicion >= 1) {
+        if (this.state !== 'chase') {  // just locked on — roar/shout and rally the others
+          this.audio?.play(this.type === 'corvo' ? 'corvoAlert' : 'chaseRoar', p);
+          this.onSpotted?.(playerPos.clone(), this.type);
+        }
         this.state = 'chase';
         this.lastSeenT = 0;
         this.noiseTarget = playerPos.clone();
       } else if (this.suspicion > 0.45 && (this.state === 'patrol' || this.state === 'wait')) {
-        this.state = 'investigate';
-        this.noiseTarget = playerPos.clone();
-        this.investigateT = 0;
+        this.startInvestigate(playerPos);
       }
     } else if (this.state !== 'chase') {
       this.suspicion = Math.max(0, this.suspicion - dt * 0.3);
     }
 
-    // ambient growls
+    // vocalizations — positional, frequent when close, relentless while chasing
     this.growlT -= dt;
     if (this.growlT <= 0) {
-      this.growlT = 4 + Math.random() * 9;
-      if (p.distanceTo(playerPos) < 26) this.audio?.play(this.cfg.growl);
+      const d = p.distanceTo(playerPos);
+      const chasing = this.state === 'chase';
+      this.growlT = chasing ? (0.9 + Math.random() * 1.3) : (2.5 + Math.random() * 5);
+      if (d < 44) this.audio?.play(this.cfg.growl, p);
     }
 
     // state machine
@@ -359,45 +442,188 @@ export class Enemy {
         this.state = 'patrol';
       }
     } else if (this.state === 'investigate') {
+      // walk to the last-known spot, then sweep a couple of nearby points before giving up
       this.investigateT += dt;
-      const arrived = this.noiseTarget ? this.moveToward(this.noiseTarget, this.cfg.speed * 2.2, dt) : true;
-      if (arrived || this.investigateT > 8) {
-        this.suspicion = Math.max(0, this.suspicion - dt * 0.5);
-        this.group.rotation.y += dt * 0.9;
-        if (this.suspicion <= 0.05) this.state = 'patrol';
+      const target = this.noiseTarget || p;
+      const arrived = this.moveToward(target, this.cfg.speed * 2.0, dt);
+      if (arrived) {
+        this.searchLookT = (this.searchLookT || 0) + dt;
+        this.group.rotation.y += dt * 1.5;   // scan the area
+        if (this.searchLookT > 1.5) {
+          this.searchLookT = 0;
+          this.searchHops = (this.searchHops || 0) + 1;
+          if (this.searchHops <= 2) {
+            // step to a fresh nearby point — the search widens
+            const a = Math.random() * Math.PI * 2, r = 3 + Math.random() * 3;
+            this.noiseTarget = new THREE.Vector3(target.x + Math.cos(a) * r, target.y, target.z + Math.sin(a) * r);
+          } else {
+            this.suspicion = 0; this.state = 'patrol'; this.searchHops = 0;   // lost the trail
+          }
+        }
       }
+      if (this.investigateT > 15) { this.suspicion = 0; this.state = 'patrol'; this.searchHops = 0; }
     } else if (this.state === 'chase') {
       // horizontal distance — the player's eye height must not inflate melee range
       const d = Math.hypot(p.x - playerPos.x, p.z - playerPos.z);
-      // eco chases last-heard position; sighted types track directly
-      const canTrack = this.cfg.sightRange > 0 ? (seen > 0 || this.lastSeenT < 4) : false;
-      if (canTrack || d < 2.6) this.noiseTarget = playerPos.clone();
-      const target = this.noiseTarget || playerPos;
-      const arrived = this.moveToward(target, this.cfg.chaseSpeed, dt);
-      if (d < this.cfg.attackRange && this.attackT <= 0) {
-        this.attackT = this.cfg.attackCooldown;
-        this.audio?.play('attackSnarl');
-        onAttack(this.cfg.damage, this);
-      }
-      if (arrived && d > 3.5 && this.lastSeenT > 4) {
-        // lost the trail
-        this.suspicion = 0.4;
-        this.state = 'investigate';
-        this.investigateT = 0;
+      if (this.type === 'corvo') {
+        this.corvoCombat(dt, t, playerPos, seen, onAttack, d);
+      } else {
+        // infected: relentless pursuit of the last-known position
+        const canTrack = this.cfg.sightRange > 0 ? (seen > 0 || this.lastSeenT < 4) : false;
+        if (canTrack || d < 2.6) this.noiseTarget = playerPos.clone();
+        const arrived = this.moveToward(this.noiseTarget || playerPos, this.cfg.chaseSpeed, dt);
+        if (d < this.cfg.attackRange && this.attackT <= 0) {
+          this.attackT = this.cfg.attackCooldown;
+          this.audio?.play('attackSnarl', this.group.position);
+          onAttack(this.cfg.damage, this);
+        }
+        if (arrived && d > 3.5 && this.lastSeenT > 4) {
+          this.suspicion = 0.4;
+          this.state = 'investigate';
+          this.investigateT = 0;
+        }
       }
       if (this.lastSeenT > 11 && d > 14) {
+        this.releaseCover();
         this.suspicion = 0;
         this.state = 'patrol';
+        this.crouchWanted = false;
       }
     }
 
-    // gait
+    // crouch pose (Corvos in cover) — compress the body toward the ground
+    if (this.type === 'corvo') {
+      const target = (this.state === 'chase' && this.crouchWanted && this.peekT <= 0) ? 1 : 0;
+      this.crouch += (target - this.crouch) * Math.min(1, dt * 8);
+      this.group.scale.y = 1 - this.crouch * 0.32;
+      if (this.peekT > 0) this.peekT -= dt;
+      // muzzle flash decay
+      if (this.muzzle && this.muzzle.material.opacity > 0) {
+        this.muzzle.material.opacity = Math.max(0, this.muzzle.material.opacity - dt * 10);
+        this.muzzleLight.intensity = Math.max(0, this.muzzleLight.intensity - dt * 90);
+      }
+    }
+
+    // gait + positional footsteps (you hear them shuffle/march before you see them)
     const walking = this.state === 'patrol' || this.state === 'investigate' || this.state === 'chase';
     if (walking) {
       const rate = this.state === 'chase' ? 9 : 3.4;
       this.group.rotation.z = Math.sin(t * rate) * (this.type === 'corvo' ? 0.02 : 0.07);
-      this.group.position.y += 0; // ground snap already applied in moveToward
+      this.stepD = (this.stepD || 0) + Math.hypot(p.x - sx, p.z - sz);
+      const stride = this.state === 'chase' ? 1.5 : 2.1;
+      if (this.stepD > stride) {
+        this.stepD = 0;
+        if (Math.hypot(p.x - playerPos.x, p.z - playerPos.z) < 42) {
+          this.audio?.play(this.type === 'corvo' ? 'stepBoot' : 'stepInfected', p);
+        }
+      }
     }
+  }
+
+  // ---- Corvo cover tactics: hold cover, peek to shoot, flank closer ----------
+  corvoCombat(dt, t, playerPos, seen, onAttack, d) {
+    const p = this.group.position;
+    const los = this.hasLineTo(playerPos);
+    if (seen > 0 || los) { this.noiseTarget = playerPos.clone(); this.lastSeenT = 0; }
+
+    // player point-blank: abandon cover and swing
+    if (d < 4.2) {
+      this.releaseCover();
+      this.crouchWanted = false;
+      this.moveToward(playerPos, this.cfg.chaseSpeed, dt);
+      this.faceToward(playerPos, dt, 8);
+      if (d < this.cfg.attackRange && this.attackT <= 0) {
+        this.attackT = this.cfg.attackCooldown;
+        this.audio?.play('attackSnarl', p);
+        onAttack(this.cfg.damage, this);
+      }
+      return;
+    }
+
+    // acquire / rotate cover
+    this.coverT += dt;
+    if (!this.myCover || this.coverT > this.coverHold) this.pickCover(playerPos);
+
+    if (this.myCover) {
+      const cp = this.myCover.pos;
+      const distToCover = Math.hypot(p.x - cp.x, p.z - cp.z);
+      if (distToCover > 1.1) {
+        // advancing to cover — moving target, harder to hit, doesn't shoot
+        this.crouchWanted = false;
+        this.moveToward(cp, this.cfg.chaseSpeed, dt);
+      } else {
+        // holding cover: crouch, face the player, peek out to fire
+        this.crouchWanted = true;
+        this.faceToward(playerPos, dt, 5);
+        this.shootT -= dt;
+        if (los && this.shootT <= 0 && d < this.cfg.shootRange) {
+          this.shootT = this.cfg.shootCooldown + Math.random() * 1.0;
+          this.peekT = 0.55;  // pop up briefly
+          this.corvoShoot(playerPos, d, onAttack);
+        }
+      }
+    } else {
+      // no cover free — advance in the open, fire on the move occasionally
+      this.crouchWanted = false;
+      this.moveToward(playerPos, this.cfg.speed * 1.4, dt);
+      this.shootT -= dt;
+      if (los && this.shootT <= 0 && d < this.cfg.shootRange) {
+        this.shootT = this.cfg.shootCooldown + 0.6 + Math.random();
+        this.corvoShoot(playerPos, d, onAttack);
+      }
+    }
+  }
+
+  corvoShoot(playerPos, d, onAttack) {
+    this.audio?.play('corvoShot', this.group.position);
+    if (this.muzzle) { this.muzzle.material.opacity = 1; this.muzzleLight.intensity = 26; }
+    if (this.onGunNoise) this.onGunNoise(this.group.position.clone(), 30); // wakes infected
+    // accuracy falls with range and if the player is moving; cover shots are aimed
+    const hitChance = Math.max(0.12, 0.82 - d / this.cfg.shootRange * 0.6);
+    if (Math.random() < hitChance) onAttack(this.cfg.shootDamage, this, true);
+  }
+
+  pickCover(playerPos) {
+    const pts = this.world.coverPoints;
+    if (!pts || !pts.length) { this.myCover = null; return; }
+    const p = this.group.position;
+    let best = null, bestScore = Infinity;
+    for (const c of pts) {
+      if (c.taken && c.taken !== this) continue;
+      const dc = Math.hypot(p.x - c.pos.x, p.z - c.pos.z);
+      const dp = Math.hypot(playerPos.x - c.pos.x, playerPos.z - c.pos.z);
+      if (dp < 5 || dp > this.cfg.shootRange) continue;      // usable firing distance
+      // prefer near cover that is also a bit closer to the player than we are now
+      const score = dc + Math.max(0, dp - 16) * 0.5;
+      if (score < bestScore) { bestScore = score; best = c; }
+    }
+    this.releaseCover();
+    if (best) { best.taken = this; this.myCover = best; this.coverT = 0; this.coverHold = 3 + Math.random() * 3.5; }
+  }
+
+  releaseCover() {
+    if (this.myCover && this.myCover.taken === this) this.myCover.taken = false;
+    this.myCover = null;
+  }
+
+  faceToward(target, dt, rate = 6) {
+    const dx = target.x - this.group.position.x, dz = target.z - this.group.position.z;
+    const yaw = Math.atan2(dx, dz);
+    let dy = yaw - this.group.rotation.y;
+    while (dy > Math.PI) dy -= Math.PI * 2;
+    while (dy < -Math.PI) dy += Math.PI * 2;
+    this.group.rotation.y += dy * Math.min(1, dt * rate);
+  }
+
+  // line of sight ignoring FoV (for shooting from cover)
+  hasLineTo(playerPos) {
+    const eye = this.group.position.clone(); eye.y += 1.4;
+    const to = playerPos.clone(); to.y += 0.2; to.sub(eye);
+    const dist = to.length();
+    if (dist > this.cfg.shootRange + 4) return false;
+    this.ray.set(eye, to.normalize());
+    this.ray.far = dist - 0.4;
+    return this.ray.intersectObjects(this.world.occluders, false).length === 0;
   }
 }
 

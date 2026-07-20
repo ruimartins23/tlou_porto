@@ -492,6 +492,11 @@ function buildSe(world) {
   world.carWreck(62, -74, 28, 1.9);
   world.rubblePile(92, -34, 28, 2.6, 1.6, 10);
   world.grassTufts(56, 94, -84, -30, 28, 120);
+  // Corvo cover positions — beside the barricades, wreck, rubble, pillar and steps
+  world.coverPoints = [
+    [60, -63], [63, -57], [74, -33], [71, -39], [62, -71], [65, -77],
+    [92, -37], [89, -31], [66, -47], [82, -66], [78, -78], [58, -50],
+  ].map(([x, z]) => ({ pos: new THREE.Vector3(x, 28, z), taken: false }));
   // campfire (lit — the Corvos were just here)
   const fire = new THREE.PointLight(0xff8038, 16, 14, 1.8);
   fire.position.set(70, 29.1, -56);
