@@ -47,7 +47,6 @@ export class World {
     this.locations = {};
     // Perf: every extra visible point light costs CPU (light uniforms are re-uploaded
     // per material per frame). We register them all and keep only the nearest few live.
-    this.cullableLights = [];
     this.maxLiveLights = 5;
     this._lightTmp = new THREE.Vector3();
     // shared geometry/material caches — cuts thousands of unique GPU objects
@@ -85,6 +84,7 @@ export class World {
       metalWide: new THREE.MeshStandardMaterial({ map: metalTexture(14, 3), roughness: 0.62, metalness: 0.55 }),
     };
 
+    this.buildLightRig();
     this.buildSky();
     this.buildLights();
     this.buildTerrain();
@@ -112,35 +112,89 @@ export class World {
     return m;
   }
 
-  // A point light that only goes live when the camera is near enough to see its pool.
+  // ---- light rig -----------------------------------------------------------------
+  // Three.js bakes the light count into every shader, so ANY change to how many lights
+  // are visible recompiles every material in the scene — a hard hitch. So the scene owns
+  // a fixed pool of point lights that is always visible, and each frame we re-point the
+  // slots at whichever registered sources are nearest. Constant count, zero recompiles.
+  buildLightRig() {
+    this.lightSources = [];
+    this.lightSlots = [];
+    for (let i = 0; i < this.maxLiveLights; i++) {
+      const l = new THREE.PointLight(0xffffff, 0, 15, 2);
+      l.visible = true;              // ALWAYS visible — never toggle this
+      this.scene.add(l);
+      this.lightSlots.push(l);
+    }
+    // one extra slot reserved for gunfire, so a muzzle flash never changes the count
+    this.flashSlot = new THREE.PointLight(0xffb060, 0, 14, 2);
+    this.flashSlot.visible = true;
+    this.scene.add(this.flashSlot);
+    this.flashT = 0;
+  }
+
+  // Register a light as a *source*. The light object itself is detached from rendering;
+  // existing flicker code can keep writing to its .intensity and the rig will pick it up.
   addCullableLight(light, priority = 0) {
-    light.userData.cullRadius = (light.distance || 15) + 14;
+    light.visible = false;                 // never rendered directly
     light.userData.priority = priority;
-    this.cullableLights.push(light);
+    this.lightSources.push(light);
     return light;
   }
 
   removeCullableLight(light) {
-    const i = this.cullableLights.indexOf(light);
-    if (i >= 0) this.cullableLights.splice(i, 1);
+    const i = this.lightSources.indexOf(light);
+    if (i >= 0) this.lightSources.splice(i, 1);
   }
 
-  // Keep only the nearest few lights visible — the rest contribute nothing on screen but
-  // would still cost full per-material uniform uploads every frame.
-  updateLights(camPos) {
-    const list = this.cullableLights;
-    for (let i = 0; i < list.length; i++) {
-      const l = list[i];
-      l.getWorldPosition(this._lightTmp);
-      const d = this._lightTmp.distanceTo(camPos);
-      l.userData._d = d - l.userData.priority * 40;   // priority pulls a light forward
-      l.visible = d < l.userData.cullRadius;
+  // Fire a muzzle flash from the shared slot (any number of guns, always one light).
+  flashAt(worldPos, intensity = 26, color = 0xffb060) {
+    this.flashSlot.position.copy(worldPos);
+    this.flashSlot.color.setHex(color);
+    this.flashSlot.intensity = intensity;
+    this.flashT = 0.06;
+  }
+
+  updateLights(camPos, dt = 0.016) {
+    // muzzle flash decay (intensity only — the light itself stays visible)
+    if (this.flashT > 0) {
+      this.flashT -= dt;
+      this.flashSlot.intensity = Math.max(0, this.flashSlot.intensity - dt * 420);
+      if (this.flashT <= 0) this.flashSlot.intensity = 0;
     }
-    // of those in range, keep the closest maxLiveLights
-    const live = list.filter((l) => l.visible);
-    if (live.length > this.maxLiveLights) {
-      live.sort((a, b) => a.userData._d - b.userData._d);
-      for (let i = this.maxLiveLights; i < live.length; i++) live[i].visible = false;
+
+    const src = this.lightSources;
+    for (let i = 0; i < src.length; i++) {
+      const l = src[i];
+      l.getWorldPosition(this._lightTmp);
+      l.userData._d = this._lightTmp.distanceTo(camPos) - l.userData.priority * 40;
+      l.userData._wx = this._lightTmp.x; l.userData._wy = this._lightTmp.y; l.userData._wz = this._lightTmp.z;
+    }
+    // nearest-N selection (small N, so a partial selection sort beats a full sort)
+    const slots = this.lightSlots;
+    const picked = this._picked || (this._picked = []);
+    picked.length = 0;
+    for (let n = 0; n < slots.length; n++) {
+      let best = null, bestD = Infinity;
+      for (let i = 0; i < src.length; i++) {
+        const l = src[i];
+        if (picked.indexOf(l) >= 0) continue;
+        if (l.userData._d < bestD) { bestD = l.userData._d; best = l; }
+      }
+      if (!best) break;
+      picked.push(best);
+    }
+    for (let n = 0; n < slots.length; n++) {
+      const slot = slots[n], s = picked[n];
+      if (!s) { slot.intensity = 0; continue; }
+      slot.position.set(s.userData._wx, s.userData._wy, s.userData._wz);
+      slot.color.copy(s.color);
+      slot.distance = s.distance;
+      slot.decay = s.decay;
+      // fade a source out as it leaves its useful radius, so slots swap without a visible pop
+      const d = s.userData._d + s.userData.priority * 40;
+      const fade = Math.max(0, Math.min(1, (s.distance + 16 - d) / 8));
+      slot.intensity = s.intensity * fade;
     }
   }
 
@@ -246,7 +300,7 @@ export class World {
       pl.position.set(x, groundY + 4.4, z);
       this.scene.add(pl);
       this.addCullableLight(pl);
-      this.animated.push({ update: (t) => { if (pl.visible) pl.intensity = 11 + Math.sin(t * 13.7) * 1.2 + Math.sin(t * 7.3) * 0.8; } });
+      this.animated.push({ update: (t) => { pl.intensity = 11 + Math.sin(t * 13.7) * 1.2 + Math.sin(t * 7.3) * 0.8; } });
     }
   }
 
@@ -400,11 +454,11 @@ export class World {
         }`,
     });
     this.scene.add(new THREE.Mesh(geo, mat));
-    this.scene.fog = new THREE.Fog(0x8d8478, 55, 460);
+    this.scene.fog = new THREE.Fog(0x9a9184, 42, 380);
   }
 
   buildLights() {
-    this.scene.add(new THREE.HemisphereLight(0x9aa0a8, 0x4a4a3c, 1.5));
+    this.scene.add(new THREE.HemisphereLight(0x9aa0a8, 0x54544a, 2.0));
     const sun = new THREE.DirectionalLight(0xffdCA8, 2.1);
     sun.position.set(-130, 95, 55);
     sun.target.position.set(30, 10, -40);
@@ -423,7 +477,7 @@ export class World {
     // light direction (and therefore the whole mood) must never change.
     this.sunDir = sun.target.position.clone().sub(sun.position).normalize();
     this.sunDist = 150;
-    this.scene.add(new THREE.AmbientLight(0x565b64, 0.55));
+    this.scene.add(new THREE.AmbientLight(0x656b78, 1.0));
   }
 
   // ------------------------------------------------------------- terrain

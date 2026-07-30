@@ -829,6 +829,7 @@ export class Story {
     if (this.subMarker) return this.subMarker;
     const L = this.world.locations;
     switch (this.stage) {
+      case -1: return this.rui.position;   // the opening: guide the player to turn around
       case 0: return null;
       case 1: return L.saoJoaoFoot;
       case 2: return new THREE.Vector3(27, 12, -90);
@@ -844,6 +845,8 @@ export class Story {
   // ------------------------------------------------------------ beats
   begin() {
     this.ui.areaCard('Cais da Ribeira', tx('Porto — year 8 of the Cinza', 'Porto — ano 8 da Cinza'));
+    this.ui.setObjective(tx('Turn around — Rui is behind you, on the mattress',
+      'Vira-te — o Rui está atrás de ti, no colchão'));
     this.say([
       { speaker: 'Inês', text: tx('The river still smells the same. Salt, silt, and rust. Everything else this city was — the ash took.', 'O rio ainda cheira ao mesmo. Sal, lodo e ferrugem. Tudo o resto que esta cidade foi — a cinza levou.') },
       { speaker: 'Inês', text: tx('Rui\'s message reached me at the west wall this morning: "Come before dark. Bring nothing. Tell no one." Eight years of smuggling taught me what that grammar means.', 'O recado do Rui chegou-me à muralha oeste esta manhã: "Vem antes de escurecer. Não tragas nada. Não digas a ninguém." Oito anos de contrabando ensinaram-me o que essa gramática quer dizer.') },

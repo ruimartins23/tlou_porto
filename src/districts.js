@@ -168,17 +168,35 @@ function buildRibeira(world) {
   world.box(1.2, 1.4, 0.5, M.wood, -47.5, 0.7, 6);               // shelf
   world.box(0.9, 0.9, 0.9, M.wood, -50, 0.45, 5.2);              // crate
   world.box(0.9, 0.5, 1.4, M.wood, -52.5, 0.25, 10.5);           // bench
-  // oil lamp glow
+  // ---- the oil lamp: an actual hurricane lantern hung from the ceiling beam, so the
+  //      flame has something holding it up instead of floating in the dark
+  const LX = -53.2, LY = 2.35, LZ = 7.2;
+  const hook = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 1.25, 6), M.iron);
+  hook.position.set(LX, LY + 0.95, LZ);
+  world.scene.add(hook);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.15, 0.09, 10), M.iron);
+  cap.position.set(LX, LY + 0.3, LZ);
+  cap.castShadow = true;
+  const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.13, 0.26, 12),
+    new THREE.MeshStandardMaterial({ color: 0xd8c9a8, roughness: 0.25, transparent: true, opacity: 0.42 }));
+  glass.position.set(LX, LY + 0.08, LZ);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.1, 0.11, 10), M.rust);
+  base.position.set(LX, LY - 0.1, LZ);
+  base.castShadow = true;
+  const wick = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffcf80 }));
+  wick.position.set(LX, LY + 0.06, LZ);
+  world.scene.add(cap, glass, base, wick);
+
   const lamp = new THREE.PointLight(0xffa050, 14, 15, 1.8);
-  lamp.position.set(-53.5, 2.4, 7.4);
+  lamp.position.set(LX, LY + 0.06, LZ);
   world.scene.add(lamp);
-  world.addCullableLight(lamp);
-  world.animated.push({ update: (t) => { if (lamp.visible) lamp.intensity = 8 + Math.sin(t * 9.1) * 1.1 + Math.sin(t * 15.7) * 0.7; } });
+  world.addCullableLight(lamp, 1);
+  world.animated.push({ update: (t) => { lamp.intensity = 9.5 + Math.sin(t * 9.1) * 1.1 + Math.sin(t * 15.7) * 0.7; } });
   const flame = new THREE.Sprite(new THREE.SpriteMaterial({
     map: world.emberTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.85,
   }));
-  flame.scale.set(1.1, 1.1, 1);
-  flame.position.set(-52, 2.2, 7);
+  flame.scale.set(0.62, 0.62, 1);
+  flame.position.set(LX, LY + 0.07, LZ);
   world.scene.add(flame);
 
   // ---- Praça da Ribeira
@@ -525,7 +543,7 @@ function buildSe(world) {
   fire.position.set(70, 29.1, -56);
   world.scene.add(fire);
   world.addCullableLight(fire, 1);
-  world.animated.push({ update: (t) => { if (fire.visible) fire.intensity = 14 + Math.sin(t * 11) * 2.5 + Math.sin(t * 23) * 1.5; } });
+  world.animated.push({ update: (t) => { fire.intensity = 14 + Math.sin(t * 11) * 2.5 + Math.sin(t * 23) * 1.5; } });
   const fireGlow = new THREE.Sprite(new THREE.SpriteMaterial({
     map: world.emberTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.9,
   }));
@@ -893,7 +911,7 @@ function buildBolhao(world) {
   brazier.position.set(X1 + 4, FY + 1.4, Z1 + 9);
   world.scene.add(brazier);
   world.addCullableLight(brazier, 1);
-  world.animated.push({ update: (t) => { if (brazier.visible) brazier.intensity = 11 + Math.sin(t * 10.3) * 2.2 + Math.sin(t * 21) * 1.2; } });
+  world.animated.push({ update: (t) => { brazier.intensity = 11 + Math.sin(t * 10.3) * 2.2 + Math.sin(t * 21) * 1.2; } });
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({
     map: world.emberTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.85,
   }));

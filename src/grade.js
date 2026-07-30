@@ -8,11 +8,11 @@ export const CinemaGrade = {
     tDiffuse: { value: null },
     uTime: { value: 0 },
     uResolution: { value: new THREE.Vector2(1, 1) },
-    uVignette: { value: 0.32 },
+    uVignette: { value: 0.22 },
     uContrast: { value: 1.10 },
     uSaturation: { value: 0.94 },
     uGrain: { value: 0.045 },
-    uLift: { value: 0.0 },
+    uLift: { value: 0.035 },
     uListen: { value: 0.0 },   // focus / listen-mode blend 0..1
   },
   vertexShader: /* glsl */`

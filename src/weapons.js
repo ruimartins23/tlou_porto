@@ -139,9 +139,7 @@ export class WeaponSystem {
     this.flash.scale.set(0.5, 0.5, 1);
     this.flash.visible = false;
     camera.add(this.flash);
-    this.flashLight = new THREE.PointLight(0xffb060, 0, 14, 2);
-    this.flashLight.visible = false;   // only live during a shot
-    camera.add(this.flashLight);
+
 
     this.aiming = false;      // aim-down-sights
 
@@ -392,9 +390,8 @@ export class WeaponSystem {
     this.flash.material.opacity = 1;
     this.flash.material.rotation = Math.random() * Math.PI;
     this.flash.visible = true;
-    this.flashLight.position.copy(muzzle);
-    this.flashLight.intensity = this.active === 'shotgun' ? 40 : 26;
-    this.flashLight.visible = true;
+    this.flash.getWorldPosition(this._flashWorld || (this._flashWorld = new THREE.Vector3()));
+    this.world.flashAt(this._flashWorld, this.active === 'shotgun' ? 40 : 26);
     this.flashDecay = 1;
   }
 
@@ -423,8 +420,7 @@ export class WeaponSystem {
     if (this.flashDecay > 0) {
       this.flashDecay -= dt * 12;
       this.flash.material.opacity = Math.max(0, this.flashDecay);
-      this.flashLight.intensity *= Math.max(0, this.flashDecay);
-      if (this.flashDecay <= 0) { this.flash.visible = false; this.flashLight.intensity = 0; this.flashLight.visible = false; }
+      if (this.flashDecay <= 0) this.flash.visible = false;
     }
 
     if (!this.active) return;

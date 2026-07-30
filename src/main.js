@@ -20,12 +20,12 @@ import { Lang, setLang, tr, UI_TEXT } from './lang.js';
 // ---------------------------------------------------------------- localization
 const CONTROLS = {
   title: {
-    en: '<b>W A S D</b> move &nbsp; <b>Shift</b> run &nbsp; <b>C</b> <span style="color:#c8b06a">crouch</span> &nbsp; <b>V</b> <span style="color:#c8b06a">listen</span> &nbsp; <b>Mouse</b> look &nbsp; <b>L-Click</b> attack / fire &nbsp; <b>R-Click</b> aim &nbsp; <b>1 2 3</b> weapons<br><b>E</b> interact / <span style="color:#c8b06a">stealth takedown</span> &nbsp; <b>R</b> reload &nbsp; <b>Q</b> brick &nbsp; <b>G</b> molotov &nbsp; <b>H</b> bandage &nbsp; <b>F</b> torch &nbsp; <b>J</b> notebook &nbsp; <b>X</b> craft &nbsp; <b>Esc</b> pause',
-    pt: '<b>W A S D</b> mover &nbsp; <b>Shift</b> correr &nbsp; <b>C</b> <span style="color:#c8b06a">agachar</span> &nbsp; <b>V</b> <span style="color:#c8b06a">escutar</span> &nbsp; <b>Rato</b> olhar &nbsp; <b>Clique-Esq</b> atacar / disparar &nbsp; <b>Clique-Dir</b> mirar &nbsp; <b>1 2 3</b> armas<br><b>E</b> interagir / <span style="color:#c8b06a">execução furtiva</span> &nbsp; <b>R</b> recarregar &nbsp; <b>Q</b> tijolo &nbsp; <b>G</b> molotov &nbsp; <b>H</b> ligadura &nbsp; <b>F</b> lanterna &nbsp; <b>J</b> caderno &nbsp; <b>X</b> fabricar &nbsp; <b>Esc</b> pausa',
+    en: '<b>W A S D</b> move &nbsp; <b>Shift</b> run &nbsp; <b>C</b> <span style="color:#c8b06a">crouch</span> &nbsp; <b>V</b> <span style="color:#c8b06a">listen</span> &nbsp; <b>Mouse</b> look &nbsp; <b>L-Click</b> attack / fire &nbsp; <b>R-Click</b> aim &nbsp; <b>1 2 3</b> weapons<br><b>E</b> interact / <span style="color:#c8b06a">stealth takedown</span> &nbsp; <b>R</b> reload &nbsp; <b>Q</b> brick &nbsp; <b>G</b> molotov &nbsp; <b>H</b> bandage &nbsp; <b>F</b> torch &nbsp; <b>J</b> notebook &nbsp; <b>X</b> craft &nbsp; <b>P</b> fps &nbsp; <b>Esc</b> pause',
+    pt: '<b>W A S D</b> mover &nbsp; <b>Shift</b> correr &nbsp; <b>C</b> <span style="color:#c8b06a">agachar</span> &nbsp; <b>V</b> <span style="color:#c8b06a">escutar</span> &nbsp; <b>Rato</b> olhar &nbsp; <b>Clique-Esq</b> atacar / disparar &nbsp; <b>Clique-Dir</b> mirar &nbsp; <b>1 2 3</b> armas<br><b>E</b> interagir / <span style="color:#c8b06a">execução furtiva</span> &nbsp; <b>R</b> recarregar &nbsp; <b>Q</b> tijolo &nbsp; <b>G</b> molotov &nbsp; <b>H</b> ligadura &nbsp; <b>F</b> lanterna &nbsp; <b>J</b> caderno &nbsp; <b>X</b> fabricar &nbsp; <b>P</b> fps &nbsp; <b>Esc</b> pausa',
   },
   pause: {
-    en: '<b>W A S D</b> move &nbsp; <b>Shift</b> run &nbsp; <b>C</b> crouch &nbsp; <b>V</b> listen &nbsp; <b>L-Click</b> attack / fire &nbsp; <b>R-Click</b> aim &nbsp; <b>1 2 3</b> weapons &nbsp; <b>R</b> reload &nbsp; <b>E</b> interact / takedown<br><b>Q</b> brick &nbsp; <b>G</b> molotov &nbsp; <b>H</b> bandage &nbsp; <b>F</b> torch &nbsp; <b>X</b> craft &nbsp; <b>J</b> notebook',
-    pt: '<b>W A S D</b> mover &nbsp; <b>Shift</b> correr &nbsp; <b>C</b> agachar &nbsp; <b>V</b> escutar &nbsp; <b>Clique-Esq</b> atacar / disparar &nbsp; <b>Clique-Dir</b> mirar &nbsp; <b>1 2 3</b> armas &nbsp; <b>R</b> recarregar &nbsp; <b>E</b> interagir / execução<br><b>Q</b> tijolo &nbsp; <b>G</b> molotov &nbsp; <b>H</b> ligadura &nbsp; <b>F</b> lanterna &nbsp; <b>X</b> fabricar &nbsp; <b>J</b> caderno',
+    en: '<b>W A S D</b> move &nbsp; <b>Shift</b> run &nbsp; <b>C</b> crouch &nbsp; <b>V</b> listen &nbsp; <b>L-Click</b> attack / fire &nbsp; <b>R-Click</b> aim &nbsp; <b>1 2 3</b> weapons &nbsp; <b>R</b> reload &nbsp; <b>E</b> interact / takedown<br><b>Q</b> brick &nbsp; <b>G</b> molotov &nbsp; <b>H</b> bandage &nbsp; <b>F</b> torch &nbsp; <b>X</b> craft &nbsp; <b>P</b> fps &nbsp; <b>J</b> notebook',
+    pt: '<b>W A S D</b> mover &nbsp; <b>Shift</b> correr &nbsp; <b>C</b> agachar &nbsp; <b>V</b> escutar &nbsp; <b>Clique-Esq</b> atacar / disparar &nbsp; <b>Clique-Dir</b> mirar &nbsp; <b>1 2 3</b> armas &nbsp; <b>R</b> recarregar &nbsp; <b>E</b> interagir / execução<br><b>Q</b> tijolo &nbsp; <b>G</b> molotov &nbsp; <b>H</b> ligadura &nbsp; <b>F</b> lanterna &nbsp; <b>X</b> fabricar &nbsp; <b>P</b> fps &nbsp; <b>J</b> caderno',
   },
 };
 
@@ -53,7 +53,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+renderer.toneMappingExposure = 1.18;   // the ash grade eats a lot of light back
 $('app').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -356,6 +356,8 @@ document.addEventListener('keydown', (e) => {
     }
   } else if (e.code === 'KeyF') {
     player.setTorch(!player.torchOn);
+  } else if (e.code === 'KeyP') {
+    setFpsShown(!fpsShown);
   } else if (e.code === 'Escape' && !document.pointerLockElement) {
     if (!ui.dialogueActive) setPaused(!paused);
   }
@@ -467,7 +469,7 @@ function frame() {
 
   world.update(t, dt);
   // keep only the nearby lights live and the shadow frustum tight around the player
-  world.updateLights(camera.position);
+  world.updateLights(camera.position, dt);
   world.updateShadowCamera(player.position);
 
   if (started && !ended && !dead) {
@@ -558,16 +560,41 @@ function frame() {
   grade.uniforms.uTime.value = t;
   composer.render();
 
-  // rolling FPS (for diagnostics)
+  // rolling FPS + worst-frame tracking (the counter reports both — an average alone
+  // hides the stutter that actually gets noticed)
   fpsFrames++;
+  frameTimes.push(dt * 1000);
+  if (frameTimes.length > 180) frameTimes.shift();
   const now = performance.now();
   if (now - fpsLast >= 500) {
     fpsValue = Math.round((fpsFrames * 1000) / (now - fpsLast));
     fpsFrames = 0;
     fpsLast = now;
+    if (fpsShown) {
+      const sorted = [...frameTimes].sort((a, b) => a - b);
+      const med = sorted[Math.floor(sorted.length / 2)] || 0;
+      const p99 = sorted[Math.floor(sorted.length * 0.99)] || 0;
+      const cls = (v) => (v > 33 ? 'bad' : v > 17 ? 'warn' : '');
+      $('fps').innerHTML =
+        `<span class="${cls(med)}">${fpsValue} fps</span> <small>${med.toFixed(1)} ms</small><br>` +
+        `<small>worst</small> <span class="${cls(p99)}">${p99.toFixed(1)} ms</span>`;
+    }
   }
 }
-let fpsFrames = 0, fpsLast = performance.now(), fpsValue = 0;
+// Warm the shader cache before the first frame — otherwise the first time each material
+// is seen the driver compiles it mid-frame and the game hitches as you enter new areas.
+try { renderer.compile(scene, camera); } catch (e) { /* non-fatal */ }
+
+let fpsFrames = 0, fpsLast = performance.now(), fpsValue = 0, fpsShown = false;
+const frameTimes = [];
+
+// FPS counter toggle (P) — remembered between sessions
+function setFpsShown(on) {
+  fpsShown = on;
+  $('fps').classList.toggle('show', on);
+  try { localStorage.setItem('cinza.fps', on ? '1' : '0'); } catch (e) { /* private mode */ }
+}
+try { if (localStorage.getItem('cinza.fps') === '1') setFpsShown(true); } catch (e) { /* ignore */ }
 frame();
 
 // Debug/testing hooks

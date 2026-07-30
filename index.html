@@ -93,6 +93,17 @@
   }
   #detect > div { height: 100%; width: 0%; background: linear-gradient(90deg, #b8a05c, #b13a2a); transition: width 0.1s linear; }
 
+  #fps {
+    position: absolute; top: 10px; right: 14px; display: none;
+    color: #9fe0a0; font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+    background: rgba(6,8,6,0.55); padding: 4px 9px; border-radius: 3px;
+    border: 1px solid rgba(160,220,160,0.22); text-shadow: 0 1px 2px #000; line-height: 1.45;
+  }
+  #fps.show { display: block; }
+  #fps .warn { color: #e0c06a; }
+  #fps .bad { color: #e07a6a; }
+  #fps small { color: rgba(200,230,200,0.55); }
+
   #marker {
     position: absolute; color: #b8a05c; font-size: 20px; text-shadow: 0 1px 4px #000;
     transform: translate(-50%, -50%); display: none; pointer-events: none; opacity: 0.85;
@@ -279,6 +290,7 @@
       </div>
     </div>
     <div id="dmg-dir"><div class="arc"></div></div>
+    <div id="fps"></div>
     <div id="detect"><div></div></div>
     <div id="marker">◆<span class="dist"></span></div>
     <div id="toast"></div>

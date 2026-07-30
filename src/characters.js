@@ -189,10 +189,6 @@ export class Enemy {
       this.muzzle.scale.set(0.5, 0.5, 1);
       this.muzzle.position.set(0.28, 1.15, 0.35);
       this.group.add(this.muzzle);
-      this.muzzleLight = new THREE.PointLight(0xffb060, 0, 8, 2);
-      this.muzzleLight.position.set(0.28, 1.15, 0.4);
-      this.muzzleLight.visible = false;   // a dark light still costs uniforms — hide it
-      this.group.add(this.muzzleLight);
     }
   }
 
@@ -517,8 +513,6 @@ export class Enemy {
       // muzzle flash decay
       if (this.muzzle && this.muzzle.material.opacity > 0) {
         this.muzzle.material.opacity = Math.max(0, this.muzzle.material.opacity - dt * 10);
-        this.muzzleLight.intensity = Math.max(0, this.muzzleLight.intensity - dt * 90);
-        if (this.muzzleLight.intensity <= 0) this.muzzleLight.visible = false;
       }
     }
 
@@ -594,7 +588,11 @@ export class Enemy {
 
   corvoShoot(playerPos, d, onAttack) {
     this.audio?.play('corvoShot', this.group.position);
-    if (this.muzzle) { this.muzzle.material.opacity = 1; this.muzzleLight.intensity = 26; this.muzzleLight.visible = true; }
+    if (this.muzzle) {
+      this.muzzle.material.opacity = 1;
+      this.muzzle.getWorldPosition(this._flashPos || (this._flashPos = new THREE.Vector3()));
+      this.world.flashAt(this._flashPos, 24);
+    }
     if (this.onGunNoise) this.onGunNoise(this.group.position.clone(), 30); // wakes infected
     // accuracy falls with range and if the player is moving; cover shots are aimed
     const hitChance = Math.max(0.12, 0.82 - d / this.cfg.shootRange * 0.6);
