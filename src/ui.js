@@ -279,7 +279,7 @@ export class UI {
       return `<div class="recipe ${able ? 'able' : 'unable'}">
         <span class="key">${i + 1}</span>
         <span class="info"><div class="rname">${tr(UI_TEXT['item_' + r.id])}</div><div class="rcost">${cost}</div></span>
-        <span class="rhave">carry ×${player[r.out] || 0}</span>
+        <span class="rhave">${tr(UI_TEXT.craftCarry)} ×${player[r.out] || 0}</span>
       </div>`;
     }).join('');
   }

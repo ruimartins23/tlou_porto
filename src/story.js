@@ -94,6 +94,15 @@ export class Story {
     this.makeProp('cScrap3', new THREE.Vector3(112, 6.13, 44), this.componentMesh('scrap'));
     this.makeProp('cAlc4', new THREE.Vector3(88, 0.13, 118), this.componentMesh('alcohol'));
     this.makeProp('cBlade3', new THREE.Vector3(72, 0.13, 121), this.componentMesh('blade'));
+    // --- Mercado do Bolhão: the richest scavenging in the city (courtyard stalls + galleries)
+    this.makeProp('cRagB', new THREE.Vector3(6, 23.2, -172), this.componentMesh('rag'));
+    this.makeProp('cAlcB', new THREE.Vector3(20, 23.2, -179), this.componentMesh('alcohol'));
+    this.makeProp('cBladeB', new THREE.Vector3(12, 22.13, -186), this.componentMesh('blade'));
+    this.makeProp('cScrapB', new THREE.Vector3(26, 23.2, -193), this.componentMesh('scrap'));
+    this.makeProp('bolhaoBandages', new THREE.Vector3(-8, 25.75, -186),
+      new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.2, 0.24), new THREE.MeshStandardMaterial({ color: 0xb8b0a0, roughness: 0.9 })));
+    this.makeProp('bolhaoAmmo', new THREE.Vector3(34, 25.75, -185), this.ammoBoxMesh(0x3a4a2a));
+    this.makeProp('bolhaoMolotov', new THREE.Vector3(2, 22.15, -193), this.molotovMesh());
 
     // --- interactables
     this.interactables = [
@@ -197,6 +206,29 @@ export class Story {
       this.compPickup('cScrap3', 'scrap', 6),
       this.compPickup('cAlc4', 'alcohol', 7),
       this.compPickup('cBlade3', 'blade', 7),
+      // --- Mercado do Bolhão
+      this.compPickup('cRagB', 'rag', 3),
+      this.compPickup('cAlcB', 'alcohol', 3),
+      this.compPickup('cBladeB', 'blade', 3),
+      this.compPickup('cScrapB', 'scrap', 3),
+      this.pickup('bolhaoBandages', tx('Take the bandages', 'Pegar nas ligaduras'), () => {
+        this.player.bandages += 2;
+        this.ui.setSupplies(this.player.bandages, this.player.bricks, this.player.molotovs);
+        this.ui.toast(tx('Bandages +2. Someone kept a clean stock up here, above the floor.',
+          'Ligaduras +2. Alguém guardou aqui em cima um stock limpo, longe do chão.'));
+      }, () => this.stage >= 3),
+      this.pickup('bolhaoAmmo', tx('Take the revolver rounds', 'Pegar nas munições do revólver'), () => {
+        this.weapons.addAmmo('revolver', 8);
+        this.ui.setWeapon(this.weapons);
+        this.ui.toast(tx('Revolver rounds +8. The traders were armed, right up to the end.',
+          'Munições de revólver +8. Os feirantes estavam armados, até ao fim.'));
+      }, () => this.stage >= 3),
+      this.pickup('bolhaoMolotov', tx('Take the molotov', 'Pegar no cocktail molotov'), () => {
+        this.player.molotovs += 1;
+        this.ui.setSupplies(this.player.bandages, this.player.bricks, this.player.molotovs);
+        this.ui.toast(tx('Molotov +1. Bottled in the market, never thrown.',
+          'Cocktail molotov +1. Engarrafado no mercado, nunca atirado.'));
+      }, () => this.stage >= 3),
       {
         id: 'amelia', pos: L.amelia, radius: 3,
         prompt: tx('Speak to Dr. Amélia', 'Falar com a Dra. Amélia'),
@@ -373,6 +405,22 @@ export class Story {
           { speaker: 'Inês', text: tx('Stone. Be stone. Eyes down. ...Good girl. ...Now. Walk.', 'Pedra. Sê pedra. Olhos no chão. ...Boa menina. ...Agora. Anda.') },
         ]);
       }),
+      // Bolhão: a signpost on the praça — the market is an optional detour worth taking
+      this.trig('bolhaoHint', new THREE.Vector3(11, 22, -148), 7, () => this.stage >= 3, () => {
+        this.say([
+          { speaker: 'Inês', text: tx('That street north goes up to the Bolhão — the old market. Survivors ran a trading post in there for years.', 'Aquela rua para norte sobe até ao Bolhão — o mercado velho. Os sobreviventes tiveram lá um posto de troca durante anos.') },
+          { speaker: 'Beatriz', text: tx('Is anyone still trading?', 'Ainda há alguém a trocar?') },
+          { speaker: 'Inês', text: tx('No. But a market that died in a hurry leaves its shelves full. If you want parts for the kit, that is where they are. It is a detour, not the road — your call.', 'Não. Mas um mercado que morre com pressa deixa as prateleiras cheias. Se queres peças para o kit, é ali que estão. É um desvio, não é o caminho — decides tu.') },
+        ]);
+      }),
+      this.trig('cardBolhao', new THREE.Vector3(11, 22, -167), 6, () => this.stage >= 3, () => {
+        this.ui.areaCard('Mercado do Bolhão', tx('the market quarter', 'o bairro do mercado'));
+        this.say([
+          { speaker: 'Inês', text: tx('Weapons were left at that gate once. Keep yours. Stalls make good cover — and good cover works for them too.', 'Antigamente deixavam-se as armas naquele portão. Guarda a tua. As bancas são bom abrigo — e o bom abrigo também lhes serve a eles.') },
+          { speaker: 'Beatriz', text: tx('There are stairs up to the galleries.', 'Há escadas para as galerias.') },
+          { speaker: 'Inês', text: tx('Then we go high. Up there we see them before they hear us — and the good stock is always where the water never reached.', 'Então vamos por cima. Lá em cima vemo-los antes de nos ouvirem — e o bom material está sempre onde a água nunca chegou.') },
+        ]);
+      }),
       // Gaia bank: the quiet interlude — the heart of it
       this.trig('gaiaRest', new THREE.Vector3(99, 0, 120), 6, () => this.stage === 7, () => {
         this.player.frozen = true;
@@ -431,120 +479,130 @@ export class Story {
         title: tx('Chalk on a quay wall', 'Giz numa parede do cais'), src: tx('scrawled in chalk', 'rabiscado a giz'),
         journal: tx('Day 40 of the outbreak: the army sealed the bridges with the sick still inside. Whoever wrote it knew they were being walled in to die.', 'Dia 40 do surto: o exército selou as pontes com os doentes ainda lá dentro. Quem escreveu isto sabia que estava a ser emparedado para morrer.'),
         lines: [
-          'DIA 40. Eles fecharam as pontes. Selaram a cidade com os doentes lá dentro.',
-          '"Contenção", chamam-lhe. Nós chamamos-lhe o quê? Fomos deixados para trás como os outros.',
-          'Se lês isto e ainda respiras — o Porto não caiu. O Porto foi trancado. Lembra-te da diferença.',
+          tx('DAY 40. They closed the bridges. Sealed the city with the sick still inside.', 'DIA 40. Eles fecharam as pontes. Selaram a cidade com os doentes lá dentro.'),
+          tx('"Containment", they call it. What do we call it? We were left behind like all the rest.', '"Contenção", chamam-lhe. Nós chamamos-lhe o quê? Fomos deixados para trás como os outros.'),
+          tx('If you are reading this and still breathing — Porto did not fall. Porto was locked. Remember the difference.', 'Se lês isto e ainda respiras — o Porto não caiu. O Porto foi trancado. Lembra-te da diferença.'),
         ] },
       { id: 'note2', pos: new THREE.Vector3(-13, 12.16, -69), stage: 2,
         title: tx('Pharmacy ledger, last page', 'Livro da farmácia, última página'), src: tx('a pharmacist\'s hand', 'a letra de um farmacêutico'),
         journal: tx('The Largo pharmacy rationed its last antibiotics to children first. The final entry is a list of names, then nothing.', 'A farmácia do Largo racionou os últimos antibióticos, primeiro às crianças. O último registo é uma lista de nomes, e depois nada.'),
         lines: [
-          'Racionámos até ao fim. As crianças primeiro, sempre. Depois os velhos. Depois nós.',
-          'Já não há penicilina em todo o Porto. Só o que a Dra. Rocha tenta fazer, do outro lado do rio.',
-          'Se conseguires atravessar — leva os que tossem sangue. Não os deixes como me deixaram a mim.',
+          tx('We rationed to the very end. Children first, always. Then the old. Then us.', 'Racionámos até ao fim. As crianças primeiro, sempre. Depois os velhos. Depois nós.'),
+          tx('There is no penicillin left in all of Porto. Only what Dr. Rocha is trying to make, across the river.', 'Já não há penicilina em todo o Porto. Só o que a Dra. Rocha tenta fazer, do outro lado do rio.'),
+          tx('If you can get across — take the ones coughing blood. Do not leave them the way they left me.', 'Se conseguires atravessar — leva os que tossem sangue. Não os deixes como me deixaram a mim.'),
         ] },
       { id: 'note3', pos: new THREE.Vector3(80, 22.16, -126), stage: 4,
         title: tx('Message pinned in the station', 'Recado pregado na estação'), src: tx('many different hands', 'muitas letras diferentes'),
         journal: tx('Hundreds sheltered in São Bento when the bridges closed. The spores came up through the tunnels. The notes on the wall stop, all at once, on the same night.', 'Centenas abrigaram-se em São Bento quando as pontes fecharam. Os esporos subiram pelos túneis. Os recados na parede param, todos ao mesmo tempo, na mesma noite.'),
         lines: [
-          'Estamos 200 aqui dentro. Comida para dez dias. As paredes de azulejo mantêm-nos quentes.',
-          '(outra letra) 60 agora. Vieram pelos túneis. Não façam barulho. Não corram. Eles ouvem.',
-          '(outra letra, tremida) se lês isto não fiques. eles ainda estão nos comboios. deus, o barulho que fazem—',
+          tx('There are 200 of us in here. Food for ten days. The tiled walls keep us warm.', 'Estamos 200 aqui dentro. Comida para dez dias. As paredes de azulejo mantêm-nos quentes.'),
+          tx('(another hand) 60 now. They came up through the tunnels. Make no noise. Do not run. They hear.', '(outra letra) 60 agora. Vieram pelos túneis. Não façam barulho. Não corram. Eles ouvem.'),
+          tx('(another hand, shaking) if you read this do not stay. they are still in the trains. god, the noise they make—', '(outra letra, tremida) se lês isto não fiques. eles ainda estão nos comboios. deus, o barulho que fazem—'),
         ] },
       { id: 'note4', pos: new THREE.Vector3(73, 28.16, -58), stage: 5,
         title: tx('The Corvos\' creed', 'O credo dos Corvos'), src: tx('Falcão, their leader', 'Falcão, o líder deles'),
         journal: tx('Falcão\'s gang, the Corvos, hold the Sé. He preaches that the cure is a lie the dead tell — and that Mariana\'s notebook must burn so no one leaves the walls "soft with hope".', 'O bando do Falcão, os Corvos, dominam a Sé. Ele prega que a cura é uma mentira que os mortos contam — e que o caderno da Mariana tem de arder para que ninguém saia das muralhas "amolecido pela esperança".'),
         lines: [
-          'A cura é a mentira que os mortos contam aos vivos para os fazer atravessar a ponte e morrer.',
-          'A mulher Mariana encheu um caderno com essa mentira. Queimámos o laboratório dela. Queimaremos o caderno.',
-          'O Porto pertence aos que aceitam o Porto. — Falcão',
+          tx('The cure is the lie the dead tell the living to make them cross the bridge and die.', 'A cura é a mentira que os mortos contam aos vivos para os fazer atravessar a ponte e morrer.'),
+          tx('The woman Mariana filled a notebook with that lie. We burned her laboratory. We will burn the notebook.', 'A mulher Mariana encheu um caderno com essa mentira. Queimámos o laboratório dela. Queimaremos o caderno.'),
+          tx('Porto belongs to those who accept Porto. — Falcão', 'O Porto pertence aos que aceitam o Porto. — Falcão'),
         ] },
       { id: 'note5', pos: new THREE.Vector3(90, 28.16, -46), stage: 5,
         title: tx('A letter, never sent', 'Uma carta, nunca enviada'), src: tx('Mariana, to her daughter', 'Mariana, para a filha'),
         journal: tx('Mariana\'s last letter to Beatriz, taken as a trophy by the Corvos. She knew the Corvos were coming for her, and sent Beatriz to Rui before they did. Beatriz should read this. Someday.', 'A última carta da Mariana para a Beatriz, levada como troféu pelos Corvos. Ela sabia que os Corvos a vinham buscar, e mandou a Beatriz para o Rui antes disso. A Beatriz devia ler isto. Um dia.'),
         lines: [
-          'Minha Bia. Se estás a ler isto, eu não consegui sair a tempo, e o Rui cumpriu a promessa.',
-          'Tu não és uma experiência. És a prova de que isto acaba. O teu sangue lembra-se de como se vive.',
-          'Vai com a Inês. Confia nela como confiarias em mim. E não chores muito tempo — não temos tempo para isso. Amo-te.',
+          tx('My Bia. If you are reading this, I did not get out in time, and Rui kept his promise.', 'Minha Bia. Se estás a ler isto, eu não consegui sair a tempo, e o Rui cumpriu a promessa.'),
+          tx('You are not an experiment. You are the proof that this ends. Your blood remembers how to live.', 'Tu não és uma experiência. És a prova de que isto acaba. O teu sangue lembra-se de como se vive.'),
+          tx('Go with Inês. Trust her as you would trust me. And do not cry for long — we have no time for that. I love you.', 'Vai com a Inês. Confia nela como confiarias em mim. E não chores muito tempo — não temos tempo para isso. Amo-te.'),
         ] },
       { id: 'note6', pos: new THREE.Vector3(114, 6.16, 56), stage: 6,
         title: tx('Carved into a bridge girder', 'Gravado numa viga da ponte'), src: tx('knife on iron', 'faca sobre ferro'),
         journal: tx('Someone tried to cross the herd before you. They carved a tally of thirteen names into the girder. The last name is unfinished.', 'Alguém tentou atravessar a horda antes de ti. Gravaram uma conta de treze nomes na viga. O último nome está por acabar.'),
         lines: [
-          'Treze de nós tentámos a ponte ao amanhecer. Contámos os nomes para não corrermos.',
-          'Devagar. Ferro a ferro. Quando eles se viram, ficas pedra. Quando derivam, andas.',
-          'Ana. Tó. Rui P. Céu. Manel. Sofia. Do outro lado, do outro la—',
+          tx('Thirteen of us tried the bridge at dawn. We counted the names out loud to keep ourselves from running.', 'Treze de nós tentámos a ponte ao amanhecer. Contámos os nomes para não corrermos.'),
+          tx('Slowly. Iron to iron. When they turn, you are stone. When they drift, you walk.', 'Devagar. Ferro a ferro. Quando eles se viram, ficas pedra. Quando derivam, andas.'),
+          tx('Ana. Tó. Rui P. Céu. Manel. Sofia. On the other side, on the other si—', 'Ana. Tó. Rui P. Céu. Manel. Sofia. Do outro lado, do outro la—'),
         ] },
       { id: 'note7', pos: new THREE.Vector3(66, 0.16, 137), stage: 7,
         title: tx('The doctors\' board', 'O quadro dos médicos'), src: tx('Dr. Amélia Rocha', 'Dra. Amélia Rocha'),
         journal: tx('The caves have kept working for eight years on faith alone — Mariana\'s early data, and the hope that one immune child might one day walk in from the far bank.', 'As caves continuaram a trabalhar oito anos só com fé — os primeiros dados da Mariana, e a esperança de que uma criança imune pudesse, um dia, chegar da outra margem.'),
         lines: [
-          'Oito anos. Sem o caderno da Mariana, trabalhamos às cegas com o pouco que ela nos deixou.',
-          'Não paramos. Uma cidade que pára de tratar já está morta, apenas ainda não sabe.',
-          'Se alguém, algum dia, atravessar aquela ponte com a filha dela e as suas páginas — teremos começo.',
+          tx('Eight years. Without Mariana\'s notebook we work blind, on the little she left us.', 'Oito anos. Sem o caderno da Mariana, trabalhamos às cegas com o pouco que ela nos deixou.'),
+          tx('We do not stop. A city that stops treating its sick is already dead — it just does not know yet.', 'Não paramos. Uma cidade que pára de tratar já está morta, apenas ainda não sabe.'),
+          tx('If someone, someday, crosses that bridge with her daughter and her pages — we will have a beginning.', 'Se alguém, algum dia, atravessar aquela ponte com a filha dela e as suas páginas — teremos começo.'),
         ] },
       // --- Ribeira: the river was the first way out, and the first to close
       { id: 'note8', pos: new THREE.Vector3(-44, 0.16, 12), stage: 1,
         title: tx('A boatman\'s last log', 'O último registo de um barqueiro'), src: tx('pencil in a rabelo\'s ledger', 'a lápis, no livro de um rabelo'),
         journal: tx('A rabelo skipper ran people downriver toward the sea in the first weeks. The river mouth was netted and gunned. His last entry counts the boats that never came back.', 'Um mestre de rabelo levou pessoas rio abaixo, para o mar, nas primeiras semanas. A foz foi fechada com redes e armas. O último registo conta os barcos que nunca voltaram.'),
         lines: [
-          'Semana três. Levei quarenta rio abaixo, à noite, com os motores mortos, só a corrente.',
-          'A foz está fechada com redes e homens armados. Mandaram-nos voltar ou afundam-nos.',
-          'Contei os barcos que não voltaram: sete. O rio já não leva ninguém para fora. Só para baixo.',
+          tx('Week three. I took forty downriver at night, engines dead, running on the current alone.', 'Semana três. Levei quarenta rio abaixo, à noite, com os motores mortos, só a corrente.'),
+          tx('The river mouth is closed with nets and armed men. Turn back, they told us, or we sink you.', 'A foz está fechada com redes e homens armados. Mandaram-nos voltar ou afundam-nos.'),
+          tx('I counted the boats that never came back: seven. The river carries nobody out any more. Only down.', 'Contei os barcos que não voltaram: sete. O rio já não leva ninguém para fora. Só para baixo.'),
         ] },
       // --- the Largo: a family had to choose which of them went into the shelter
       { id: 'note9', pos: new THREE.Vector3(24, 12.16, -70), stage: 2,
         title: tx('A child\'s drawing, pinned to a door', 'Um desenho de criança, pregado a uma porta'), src: tx('crayon, then pencil', 'lápis de cor, depois grafite'),
         journal: tx('A child drew their whole family under a yellow sun. Later, in pencil, three of the figures were crossed out — and an adult\'s hand added a line below.', 'Uma criança desenhou a família inteira sob um sol amarelo. Mais tarde, a lápis, três figuras foram riscadas — e uma letra de adulto acrescentou uma linha por baixo.'),
         lines: [
-          'A minha família: a mãe, o pai, o avô, a mana e eu. E o sol amarelo por cima.',
-          '(por baixo, a lápis) já só a mana e eu. mas desenhei-nos a todos à mesma.',
-          '(letra de adulto) levámos as duas crianças para São Bento. que Deus nos perdoe a escolha.',
+          tx('My family: mum, dad, grandad, my sister and me. And the yellow sun on top.', 'A minha família: a mãe, o pai, o avô, a mana e eu. E o sol amarelo por cima.'),
+          tx('(below, in pencil) just my sister and me now. but i drew us all anyway.', '(por baixo, a lápis) já só a mana e eu. mas desenhei-nos a todos à mesma.'),
+          tx('(an adult\'s hand) we took the two children to São Bento. God forgive us the choice.', '(letra de adulto) levámos as duas crianças para São Bento. que Deus nos perdoe a escolha.'),
         ] },
       // --- Almeida Garrett plaza: what wealth was worth, at the end
       { id: 'note10', pos: new THREE.Vector3(24, 22.16, -122), stage: 3,
         title: tx('Note taped to a jeweller\'s till', 'Recado colado numa caixa registadora'), src: tx('the shopkeeper', 'o dono da loja'),
         journal: tx('A jeweller left the safe open and the gold untouched, offering the whole shop for a car battery that turns over and a week of insulin.', 'Um joalheiro deixou o cofre aberto e o ouro intacto, oferecendo a loja inteira por uma bateria de carro que pegue e uma semana de insulina.'),
         lines: [
-          'O cofre está aberto. O ouro é vosso. Não vale um dia de comida.',
-          'Troco a loja inteira — tudo — por uma bateria de carro que pegue e insulina para uma semana.',
-          'Se ninguém vier, ao menos alguém que fique com os anéis. Eram da minha mulher.',
+          tx('The safe is open. The gold is yours. It is not worth a single day of food.', 'O cofre está aberto. O ouro é vosso. Não vale um dia de comida.'),
+          tx('I will trade the whole shop — everything — for a car battery that turns over and a week of insulin.', 'Troco a loja inteira — tudo — por uma bateria de carro que pegue e insulina para uma semana.'),
+          tx('If nobody comes, let someone at least take the rings. They were my wife\'s.', 'Se ninguém vier, ao menos alguém que fique com os anéis. Eram da minha mulher.'),
         ] },
       // --- São Bento: the last train, and the man who chained the gates
       { id: 'note11', pos: new THREE.Vector3(58, 22.16, -118), stage: 4,
         title: tx('Dispatcher\'s board, last shift', 'Quadro do chefe de estação, último turno'), src: tx('the last dispatcher', 'o último chefe de estação'),
         journal: tx('The last train never left platform one. The dispatcher held it for evacuees — then heard the clicking come up the line from the tunnels, and chained the gates from the outside.', 'O último comboio nunca saiu da linha 1. O chefe de estação segurou-o pelos evacuados — depois ouviu os estalidos subir a linha desde os túneis, e trancou os portões pelo lado de fora.'),
         lines: [
-          'Comboio das 23h40 retido na linha 1. Espero pelos últimos. Prometi que esperava.',
-          'Vem qualquer coisa pelo túnel. Estalidos. Muitos. Não são pessoas — já não.',
-          'Tranquei os portões pelo lado de fora. Que me perdoem os que ficaram dentro. Não havia outra.',
+          tx('The 23:40 train held on platform one. Waiting for the last of them. I promised I would wait.', 'Comboio das 23h40 retido na linha 1. Espero pelos últimos. Prometi que esperava.'),
+          tx('Something is coming up the tunnel. Clicking. A great deal of it. They are not people — not any more.', 'Vem qualquer coisa pelo túnel. Estalidos. Muitos. Não são pessoas — já não.'),
+          tx('I chained the gates from the outside. May those left inside forgive me. There was no other way.', 'Tranquei os portões pelo lado de fora. Que me perdoem os que ficaram dentro. Não havia outra.'),
         ] },
       // --- the Sé: not every Corvo believes Falcão
       { id: 'note12', pos: new THREE.Vector3(60, 28.16, -68), stage: 5,
         title: tx('A Corvo\'s confession, hidden in a helmet', 'Confissão de um Corvo, escondida num capacete'), src: tx('a young Corvo', 'um Corvo jovem'),
         journal: tx('One of Falcão\'s men no longer believes the creed. He keeps a spare knife, he writes — not for outsiders, but for the night he finally runs.', 'Um dos homens do Falcão já não acredita no credo. Guarda uma faca a mais, escreve — não para os de fora, mas para a noite em que finalmente fugir.'),
         lines: [
-          'O Falcão diz que a cura é mentira. Mas se é mentira, porque é que ele tem tanto medo do caderno?',
-          'Vi a miúda que eles procuram. Não parecia uma mentira. Parecia uma filha.',
-          'Guardo uma faca a mais. Não é para os de fora. É para a noite em que eu fugir daqui.',
+          tx('Falcão says the cure is a lie. But if it is a lie, why is he so afraid of the notebook?', 'O Falcão diz que a cura é mentira. Mas se é mentira, porque é que ele tem tanto medo do caderno?'),
+          tx('I saw the girl they are hunting. She did not look like a lie. She looked like somebody\'s daughter.', 'Vi a miúda que eles procuram. Não parecia uma mentira. Parecia uma filha.'),
+          tx('I keep one knife more than I need. It is not for outsiders. It is for the night I run from here.', 'Guardo uma faca a mais. Não é para os de fora. É para a noite em que eu fugir daqui.'),
         ] },
       // --- the bridge: a smuggler's route, answered years later by R.B.
       { id: 'note13', pos: new THREE.Vector3(111, 6.16, 34), stage: 6,
         title: tx('A smuggler\'s mark on a girder', 'A marca de um contrabandista, numa viga'), src: tx('two hands, years apart', 'duas letras, com anos de intervalo'),
         journal: tx('A smuggling route marked in code on the bridge iron. A second, newer hand answers it — and signs off "R.B." The same initials as Rui Barbosa.', 'Uma rota de contrabando marcada em código no ferro da ponte. Uma segunda letra, mais recente, responde-lhe — e assina "R.B." As mesmas iniciais de Rui Barbosa.'),
         lines: [
-          'Marca do contrabandista: giz na terceira viga = passagem livre até de madrugada.',
-          '(outra letra, mais recente) a rota ainda serve. já passei aqui trinta vezes. — R.B.',
-          '(por baixo) se lês isto e tens uma criança contigo, anda de noite e não olhes para baixo.',
+          tx('Smuggler\'s mark: chalk on the third girder = clear passage until first light.', 'Marca do contrabandista: giz na terceira viga = passagem livre até de madrugada.'),
+          tx('(another hand, more recent) the route still holds. I have crossed here thirty times. — R.B.', '(outra letra, mais recente) a rota ainda serve. já passei aqui trinta vezes. — R.B.'),
+          tx('(below) if you read this and you have a child with you, move at night and do not look down.', '(por baixo) se lês isto e tens uma criança contigo, anda de noite e não olhes para baixo.'),
+        ] },
+      // --- the Bolhão: the market became a trading post, and the trading post killed it
+      { id: 'note15', pos: new THREE.Vector3(14, 25.75, -195), stage: 3,
+        title: tx('Market ledger, nailed to a post', 'Livro do mercado, pregado a um poste'), src: tx('the market keeper', 'a guarda do mercado'),
+        journal: tx('Survivors turned the Bolhão into the city\'s last market — barter only, no coin, weapons left at the gate. It worked for two years. It ended when they let a sick man trade indoors, out of pity.', 'Os sobreviventes transformaram o Bolhão no último mercado da cidade — só troca, sem dinheiro, armas à porta. Funcionou dois anos. Acabou quando, por pena, deixaram um homem doente negociar lá dentro.'),
+        lines: [
+          tx('Market rules: no coin, barter only. Weapons stay at the gate. If you cough, you trade from outside.', 'Regras do mercado: nada de dinheiro, só troca. Armas ficam no portão. Quem tossir, negocia de fora.'),
+          tx('Two years of trade. Potatoes for batteries. Bandages for salt. A winter coat for a live cockerel.', 'Dois anos a funcionar. Batatas por pilhas. Ligaduras por sal. Um casaco de inverno por um galo vivo.'),
+          tx('Today we let in a man who was coughing. He had a daughter in his arms and I could not say no.', 'Hoje deixámos entrar um homem que tossia. Tinha uma filha ao colo e eu não fui capaz de dizer não.'),
+          tx('(the writing stops mid-word) if you read this, take what you need. There is nobody left here to trade with—', '(a letra acaba a meio) se lês isto, leva o que precisares. Já não há aqui ninguém para trocar contigo—'),
         ] },
       // --- the caves: a wall of volunteers who bled for a cure that never came
       { id: 'note14', pos: new THREE.Vector3(92, 0.16, 116), stage: 7,
         title: tx('A volunteer\'s card on the cave wall', 'Um cartão de voluntário, na parede da cave'), src: tx('a resistance volunteer', 'um voluntário da resistência'),
         journal: tx('The caves keep a wall of volunteers who gave blood to Amélia\'s failing cultures. Most names are crossed through. The last card is blank — waiting for a name.', 'As caves guardam uma parede de voluntários que deram sangue às culturas falhadas da Amélia. Quase todos os nomes estão riscados. O último cartão está em branco — à espera de um nome.'),
         lines: [
-          'Dei sangue oito vezes. A Dra. diz que sem a fonte original não chega. Mas dou à mesma.',
-          'Se a menina imune atravessar um dia, o meu sangue não terá sido em vão. Nem o dos outros.',
-          '(o último cartão da parede está em branco, à espera de um nome)',
+          tx('I have given blood eight times. The doctor says it is not enough without the original source. I give it anyway.', 'Dei sangue oito vezes. A Dra. diz que sem a fonte original não chega. Mas dou à mesma.'),
+          tx('If the immune girl ever crosses, my blood will not have been for nothing. Nor anyone else\'s.', 'Se a menina imune atravessar um dia, o meu sangue não terá sido em vão. Nem o dos outros.'),
+          tx('(the last card on the wall is blank, waiting for a name)', '(o último cartão da parede está em branco, à espera de um nome)'),
         ] },
     ];
     return notes.map((n) => {
@@ -848,10 +906,10 @@ export class Story {
   woundedChoice() {
     this.player.frozen = true;
     this.say([
-      { speaker: 'Corvo', text: tx('Espera— espera. Não tenho nada. O Falcão levou tudo. Por favor, não.', 'Espera— espera. Não tenho nada. O Falcão levou tudo. Por favor, não.') },
+      { speaker: 'Corvo', text: tx('Wait— wait. I have nothing. Falcão took all of it. Please, don\'t.', 'Espera— espera. Não tenho nada. O Falcão levou tudo. Por favor, não.') },
       { speaker: 'Beatriz', text: tx('(quiet) He\'s just bleeding there, Inês. He\'s younger than you said they\'d be.', '(baixinho) Ele está só ali a sangrar, Inês. É mais novo do que disseste que eram.') },
       { speaker: 'Inês', text: tx('He\'s a Corvo, Bia. His people burned your mother\'s work. Burned people.', 'É um Corvo, Bia. A gente dele queimou o trabalho da tua mãe. Queimou pessoas.') },
-      { speaker: 'Corvo', text: tx('Eu não queimei nada. Tinha catorze anos quando isto começou. Só... não me deixem aqui para os ecos me encontrarem. Ou acabem, ou ajudem.', 'Eu não queimei nada. Tinha catorze anos quando isto começou. Só... não me deixem aqui para os ecos me encontrarem. Ou acabem, ou ajudem.') },
+      { speaker: 'Corvo', text: tx('I burned nothing. I was fourteen when this started. Just... do not leave me here for the ecos to find. Either finish it, or help me.', 'Eu não queimei nada. Tinha catorze anos quando isto começou. Só... não me deixem aqui para os ecos me encontrarem. Ou acabem, ou ajudem.') },
     ], {
       choices: [
         {

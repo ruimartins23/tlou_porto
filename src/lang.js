@@ -51,6 +51,7 @@ export const UI_TEXT = {
   craftTitle: L('Craft', 'Fabricar'),
   craftSub: L('Scavenged parts — spend them wisely.', 'Peças recolhidas dos escombros — gasta-as bem.'),
   craftClose: L('[X] close', '[X] fechar'),
+  craftCarry: L('carrying', 'levas'),
   craftEmpty: L('You have nothing to build with. Search the ruins for parts.', 'Não tens nada para construir. Vasculha as ruínas por peças.'),
   comp_rag: L('Rag', 'Pano'),
   comp_alcohol: L('Alcohol', 'Álcool'),

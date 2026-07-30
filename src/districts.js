@@ -752,10 +752,166 @@ function buildBackdrop(world) {
   });
 }
 
+// ------------------------------------------------------------------ Mercado do Bolhão (L2b)
+// Porto's market: a walled rectangle of stalls around an open courtyard, with galleries on
+// the upper floor. Survivors turned it into a trading post before it fell — so it is dense
+// cover to sneak through, and the richest scavenging in the city.
+function buildBolhao(world) {
+  const M = world.mats;
+  const FY = 22;          // courtyard floor
+  const GY = 25.6;        // upper gallery walkway
+  const X1 = -12, X2 = 38, Z1 = -198, Z2 = -164;
+
+  // ---- gate: an iron arch over the Sá da Bandeira entrance
+  world.box(3, 6.2, 1.4, M.graniteBig, 5.2, FY + 3.1, -164.6, { occlude: true });
+  world.box(3, 6.2, 1.4, M.graniteBig, 16.8, FY + 3.1, -164.6, { occlude: true });
+  world.box(14, 1.5, 1.4, M.graniteBig, 11, FY + 7, -164.6, { solid: false });
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(9, 1.4),
+    new THREE.MeshBasicMaterial({ map: signTexture('MERCADO DO BOLHÃO', '#d8cfae', '#2a251d', true), transparent: true }));
+  sign.position.set(11, FY + 7, -163.8);
+  world.scene.add(sign);
+
+  // ---- upper galleries: a U around the north half (walkable — you can move above the
+  //      infected and drop into the courtyard), reached by a stair at each arm's south end.
+  const GN = Z1 + 6;        // -192: where the north gallery meets the two arms
+  const GS = -178;          // arms run down to here; the stairs start below this
+  //      north gallery (full width)
+  world.floorPlane(X1 + 1, X2 - 1, Z1 + 1, GN, GY, M.stoneFloor);
+  world.solid(X1 + 1, X2 - 1, GY - 0.4, GY, Z1 + 1, GN);
+  //      west + east arms
+  world.floorPlane(X1 + 1, X1 + 6, GN, GS, GY, M.stoneFloor);
+  world.solid(X1 + 1, X1 + 6, GY - 0.4, GY, GN, GS);
+  world.floorPlane(X2 - 6, X2 - 1, GN, GS, GY, M.stoneFloor);
+  world.solid(X2 - 6, X2 - 1, GY - 0.4, GY, GN, GS);
+
+  // ---- a stair at the foot of each arm, rising north from the courtyard to the gallery.
+  //      rampQuad needs z1 < z2 for CCW winding (ground rays ignore backfaces), so the
+  //      north/high edge is passed first.
+  world.rampQuad(X1 + 1, X1 + 6, GS, -170, GY, GY, FY, FY, M.granite, 3);
+  world.rampQuad(X2 - 6, X2 - 1, GS, -170, GY, GY, FY, FY, M.granite, 3);
+  //      stepped mass beneath each stair so its underside is never open air
+  world.stepUnderfill(X1 + 1, X1 + 6, -170, GS, FY, GY);
+  world.stepUnderfill(X2 - 6, X2 - 1, -170, GS, FY, GY);
+
+  // gallery railings (waist-high iron) on the courtyard-facing edges
+  for (const [w, h, d, x, y, z] of [
+    [X2 - X1 - 2, 1.0, 0.16, (X1 + X2) / 2, GY + 0.5, GN],
+    [0.16, 1.0, GN - GS, X1 + 6, GY + 0.5, (GN + GS) / 2],
+    [0.16, 1.0, GN - GS, X2 - 6, GY + 0.5, (GN + GS) / 2],
+  ]) world.box(w, h, d, M.iron, x, y, z, { solid: false });
+
+  // gallery undersides + support columns
+  world.box(X2 - X1 - 2, 0.5, 5, M.granite, (X1 + X2) / 2, GY - 0.25, Z1 + 3.5, { solid: false });
+  world.box(5, 0.5, GN - GS, M.granite, X1 + 3.5, GY - 0.25, (GN + GS) / 2, { solid: false });
+  world.box(5, 0.5, GN - GS, M.granite, X2 - 3.5, GY - 0.25, (GN + GS) / 2, { solid: false });
+  // columns sit under the gallery arms only — never in the stair runs, which must stay clear
+  for (const [cx, cz] of [[X1 + 6, GN], [X2 - 6, GN], [X1 + 6, GS - 2], [X2 - 6, GS - 2]]) {
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.3, GY - FY, 10), M.iron);
+    col.position.set(cx, FY + (GY - FY) / 2, cz);
+    col.castShadow = true;
+    world.scene.add(col);
+    world.solid(cx - 0.3, cx + 0.3, FY, GY, cz - 0.3, cz + 0.3);
+  }
+
+  // ---- corrugated iron roof over the galleries, mostly collapsed over the courtyard
+  for (const [w, d, x, z, tilt] of [
+    [X2 - X1, 7, (X1 + X2) / 2, Z1 + 3.5, 0.16],
+    [7, 20, X1 + 3.5, -180, 0],
+    [7, 20, X2 - 3.5, -180, 0],
+  ]) {
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(w, 0.3, d), M.metalWide);
+    roof.position.set(x, FY + 8.6, z);
+    roof.rotation.x = tilt;
+    roof.castShadow = true;
+    world.scene.add(roof);
+  }
+  // a fallen roof panel leaning into the courtyard
+  const fallen = new THREE.Mesh(new THREE.BoxGeometry(9, 0.25, 6), M.metal);
+  fallen.position.set(20, FY + 2.2, -178);
+  fallen.rotation.set(0.35, 0.4, -0.9);
+  fallen.castShadow = true;
+  world.scene.add(fallen);
+  world.solid(17, 23, FY, FY + 4, -181, -175);
+
+  // ---- the stalls: rows of granite counters with wooden canopies. This is the cover maze.
+  const stallRows = [
+    { z: -172, xs: [0, 6, 12, 18, 24] },
+    { z: -179, xs: [2, 8, 14, 20, 26] },
+    { z: -186, xs: [0, 6, 12, 18, 24] },
+    { z: -193, xs: [4, 10, 16, 22, 28] },
+  ];
+  for (const row of stallRows) {
+    for (const x of row.xs) {
+      world.box(4.2, 1.1, 2.2, M.granite, x, FY + 0.55, row.z, { occlude: false });          // counter
+      world.box(4.4, 0.14, 2.6, M.woodDark, x, FY + 2.6, row.z, { solid: false });           // canopy
+      for (const sx of [-1.9, 1.9]) {                                                        // canopy posts
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 2.5, 6), M.iron);
+        post.position.set(x + sx, FY + 1.3, row.z + 1.1);
+        world.scene.add(post);
+      }
+      if (rand() < 0.45) {                                                                   // crates on top
+        world.box(0.8, 0.7, 0.8, M.wood, x + (rand() - 0.5) * 2, FY + 1.45, row.z, { solid: false });
+      }
+      if (rand() < 0.3) world.rubblePile(x + (rand() - 0.5) * 3, row.z + 2.6, FY, 1.3, 0.8, 7);
+    }
+  }
+
+  // ---- dressing: produce crates, a scale, hanging hooks, moss, ash, ivy on the walls
+  for (let i = 0; i < 18; i++) {
+    const cx = X1 + 3 + rand() * (X2 - X1 - 6);
+    const cz = Z1 + 3 + rand() * (Z2 - Z1 - 6);
+    const s = 0.55 + rand() * 0.5;
+    world.box(s, s * 0.8, s, rand() < 0.5 ? M.wood : M.woodDark, cx, FY + s * 0.4, cz, { solid: false });
+  }
+  world.grassTufts(X1 + 2, X2 - 2, Z1 + 2, Z2 - 2, FY, 90);
+  for (const [ix, iz, rot] of [[X1 + 1.4, -180, Math.PI / 2], [X2 - 1.4, -186, -Math.PI / 2], [12, Z1 + 1.4, 0]]) {
+    world.ivyPatch(ix, FY + 3.4, iz, 3.2, 5.4, rot);
+  }
+  world.lamp(2, -168, FY, { light: true });
+  world.lamp(30, -194, FY, { broken: true });
+  world.lamp(30, -170, FY, { light: true });
+  world.lamp(4, -190, FY, { light: true });
+
+  // daylight falling through the holes in the gallery roof — the market reads as a lit
+  // space rather than a black box, and the shafts pick out the stall rows
+  const shaftMat = new THREE.MeshBasicMaterial({
+    color: 0xffe6b8, transparent: true, opacity: 0.055, blending: THREE.AdditiveBlending,
+    depthWrite: false, side: THREE.DoubleSide,
+  });
+  for (const [sx, sz, r] of [[16, -176, 2.6], [26, -188, 2.0], [6, -182, 2.2]]) {
+    const shaft = new THREE.Mesh(new THREE.ConeGeometry(r, 10, 12, 1, true), shaftMat);
+    shaft.position.set(sx, FY + 5, sz);
+    world.scene.add(shaft);
+    const pool = new THREE.PointLight(0xffe0a8, 13, 17, 2);
+    pool.position.set(sx, FY + 3.2, sz);
+    world.scene.add(pool);
+    world.addCullableLight(pool, 1);   // keep the market readable while you are inside it
+  }
+
+  // a dead trader's brazier, still smouldering in the north-west corner
+  const brazier = new THREE.PointLight(0xff8038, 13, 13, 1.9);
+  brazier.position.set(X1 + 4, FY + 1.4, Z1 + 9);
+  world.scene.add(brazier);
+  world.addCullableLight(brazier, 1);
+  world.animated.push({ update: (t) => { if (brazier.visible) brazier.intensity = 11 + Math.sin(t * 10.3) * 2.2 + Math.sin(t * 21) * 1.2; } });
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: world.emberTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.85,
+  }));
+  glow.scale.set(2.2, 2.2, 1);
+  glow.position.set(X1 + 4, FY + 1.3, Z1 + 9);
+  world.scene.add(glow);
+  world.box(1.3, 0.7, 1.3, M.rust, X1 + 4, FY + 0.35, Z1 + 9, { solid: false });
+
+  world.locations.bolhaoGate = new THREE.Vector3(11, FY, -166);
+  world.locations.bolhaoHall = new THREE.Vector3(14, FY, -181);
+  world.locations.bolhaoGallery = new THREE.Vector3(X1 + 3.5, GY, -181);
+}
+
 export function buildDistricts(world) {
   buildRibeira(world);
   buildLargo(world);
   buildSaoBento(world);
+  buildBolhao(world);
   buildSe(world);
   buildGaia(world);
   buildBackdrop(world);

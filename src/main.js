@@ -113,6 +113,13 @@ const enemies = [
   new Enemy(scene, world, 'eco', [[84, 22, -138], [64, 22, -146]], audio),
   new Enemy(scene, world, 'eco', [[52, 22, -120], [88, 22, -128]], audio),
   new Enemy(scene, world, 'eco', [[76, 22, -144], [62, 22, -124]], audio),    // São Bento — added
+  // Mercado do Bolhão — infected shuffling the stall rows; an eco makes the maze lethal.
+  // One patrols the upper gallery, so going high is safer but not free.
+  new Enemy(scene, world, 'errante', [[4, 22, -172], [24, 22, -186]], audio),
+  new Enemy(scene, world, 'errante', [[28, 22, -176], [8, 22, -190]], audio),
+  new Enemy(scene, world, 'errante', [[16, 22, -193], [2, 22, -181]], audio),
+  new Enemy(scene, world, 'eco', [[20, 22, -181], [10, 22, -176]], audio),
+  new Enemy(scene, world, 'errante', [[-8, 25.6, -186], [-8, 25.6, -194]], audio),
   // the Corvos hold the Sé — a coordinated gang
   new Enemy(scene, world, 'corvo', [[64, 28, -52], [80, 28, -68]], audio),
   new Enemy(scene, world, 'corvo', [[88, 28, -44], [70, 28, -38]], audio),

@@ -16,7 +16,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import {
   mossyCobbleTexture, cobbleBumpTexture, graniteTexture, roofTexture,
   woodTexture, stoneFloorTexture, azulejoMuralTexture, ivyTexture,
-  azulejoTexture, grassBladeTexture, rand, resetSeed
+  azulejoTexture, grassBladeTexture, metalTexture, rand, resetSeed
 } from './textures.js';
 
 export const WATER_Y = -2;
@@ -81,6 +81,8 @@ export class World {
       azulejo: new THREE.MeshStandardMaterial({ map: azulejoTexture(3, 3), roughness: 0.4 }),
       hillside: new THREE.MeshStandardMaterial({ color: 0x46423a, roughness: 1 }),
       rubbleRock: new THREE.MeshStandardMaterial({ map: graniteTexture(2, 2), roughness: 1 }),
+      metal: new THREE.MeshStandardMaterial({ map: metalTexture(6, 2), roughness: 0.62, metalness: 0.55 }),
+      metalWide: new THREE.MeshStandardMaterial({ map: metalTexture(14, 3), roughness: 0.62, metalness: 0.55 }),
     };
 
     this.buildSky();
@@ -472,6 +474,25 @@ export class World {
     this.solid(44, 60, 21, 34, -112, -108);
     this.solid(70, 96, 21, 34, -112, -108);
 
+    // L2b — Rua de Sá da Bandeira, running north off the praça to the market gate
+    this.floorPlane(6, 16, -164, -152, 22, M.cobbleStreet, 3);
+    this.solid(3.6, 6, 21, 38, -165, -152);    // street west flank
+    this.solid(16, 18.4, 21, 38, -165, -152);  // street east flank
+
+    // L2b — Mercado do Bolhão floor (the market quarter)
+    this.floorPlane(-12, 38, -198, -164, 22, M.cobbleSmall);
+    // outer market walls — south face split around the gate (x 6..16)
+    this.box(18, 9, 1.2, M.graniteBig, -3, 26.5, -164.6, { solid: true, occlude: true });
+    this.box(22, 9, 1.2, M.graniteBig, 27, 26.5, -164.6, { solid: true, occlude: true });
+    this.box(50, 9, 1.2, M.graniteBig, 13, 26.5, -197.4, { solid: true, occlude: true });   // north
+    this.box(1.2, 9, 12, M.graniteBig, -11.4, 26.5, -191.5, { solid: true, occlude: true }); // west, upper
+    this.box(1.2, 9, 10, M.graniteBig, -11.4, 26.5, -169.5, { solid: true, occlude: true }); // west, lower
+    this.box(1.2, 9, 34, M.graniteBig, 37.4, 26.5, -181, { solid: true, occlude: true });    // east
+    // keep the player inside the quarter
+    this.solid(-16, -11, 20, 40, -199, -164);
+    this.solid(37, 42, 20, 40, -199, -164);
+    this.solid(-16, 42, 20, 40, -201, -197);
+
     // alley to the Sé — climbs south from the station's flank
     this.rampQuad(60, 70, -112, -84, 22, 22, 28, 28, M.cobbleStreet, 8);
     this.stepUnderfill(60, 70, -112, -84, 22, 28);
@@ -538,6 +559,9 @@ export class World {
     this.hillMass(32, 60, -153, -88, 22 - T);
     this.hillMass(70, 93, -153, -88, 22 - T);
     this.hillMass(22, 32, -153, -118, 22 - T);   // north of the Flores ramp top
+    // under the Sá da Bandeira street + the Bolhão market quarter
+    this.hillMass(3.6, 18.4, -165, -152, 22 - T);
+    this.hillMass(-16, 42, -199, -164, 22 - T);
     this.hillMass(60, 70, -153, -112, 22 - T);   // north of the Sé-alley ramp foot
     // flanks of the Flores + alley street cuts
     this.hillMass(20.5, 22.3, -118, -88, 22 - T);
@@ -553,7 +577,9 @@ export class World {
     this.solid(-64, 140, -4, 30, 148, 152);    // south behind Gaia
     this.solid(-62, -58, -4, 30, 96, 152);     // west end Gaia
     this.solid(138, 142, -4, 30, 96, 152);     // east end Gaia
-    this.solid(-24, 96, 8, 40, -156, -152);    // north behind São Bento plaza
+    // north behind São Bento plaza — split around the Sá da Bandeira street mouth (x 6..16)
+    this.solid(-24, 6, 8, 40, -156, -152);
+    this.solid(16, 96, 8, 40, -156, -152);
     this.solid(-34, -30, 8, 26, -94, -52);     // west of largo
     this.solid(40, 44, 8, 26, -94, -52);       // east of largo
     this.solid(-24, -20, 16, 36, -156, -104);  // west of plaza
