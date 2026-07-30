@@ -45,6 +45,14 @@ export class World {
     this.occluders = [];
     this.animated = [];
     this.locations = {};
+    // Perf: every extra visible point light costs CPU (light uniforms are re-uploaded
+    // per material per frame). We register them all and keep only the nearest few live.
+    this.cullableLights = [];
+    this.maxLiveLights = 5;
+    this._lightTmp = new THREE.Vector3();
+    // shared geometry/material caches — cuts thousands of unique GPU objects
+    this._geoCache = new Map();
+    this._matCache = new Map();
     this.glowTex = glowSpriteTexture();
     this.emberTex = glowSpriteTexture(255, 150, 70);
     this.ivyTex = ivyTexture();
@@ -88,8 +96,72 @@ export class World {
     this.solids.push({ x1, x2, y1, y2, z1, z2 });
   }
 
+  // One shared unit cube, scaled per instance — instead of a fresh BoxGeometry each time.
+  unitBox() {
+    if (!this._unitBox) this._unitBox = new THREE.BoxGeometry(1, 1, 1);
+    return this._unitBox;
+  }
+
+  // Cached material factory: identical params return the very same material, so Three.js
+  // uploads its light uniforms once per frame instead of once per copy.
+  mat(key, make) {
+    let m = this._matCache.get(key);
+    if (!m) { m = make(); this._matCache.set(key, m); }
+    return m;
+  }
+
+  // A point light that only goes live when the camera is near enough to see its pool.
+  addCullableLight(light, priority = 0) {
+    light.userData.cullRadius = (light.distance || 15) + 14;
+    light.userData.priority = priority;
+    this.cullableLights.push(light);
+    return light;
+  }
+
+  removeCullableLight(light) {
+    const i = this.cullableLights.indexOf(light);
+    if (i >= 0) this.cullableLights.splice(i, 1);
+  }
+
+  // Keep only the nearest few lights visible — the rest contribute nothing on screen but
+  // would still cost full per-material uniform uploads every frame.
+  updateLights(camPos) {
+    const list = this.cullableLights;
+    for (let i = 0; i < list.length; i++) {
+      const l = list[i];
+      l.getWorldPosition(this._lightTmp);
+      const d = this._lightTmp.distanceTo(camPos);
+      l.userData._d = d - l.userData.priority * 40;   // priority pulls a light forward
+      l.visible = d < l.userData.cullRadius;
+    }
+    // of those in range, keep the closest maxLiveLights
+    const live = list.filter((l) => l.visible);
+    if (live.length > this.maxLiveLights) {
+      live.sort((a, b) => a.userData._d - b.userData._d);
+      for (let i = this.maxLiveLights; i < live.length; i++) live[i].visible = false;
+    }
+  }
+
+  // Tight, player-following shadow frustum: sharper shadows AND the shadow pass frustum-culls
+  // the whole distant city instead of redrawing it every frame.
+  updateShadowCamera(focus) {
+    const sun = this.sun;
+    if (!sun) return;
+    const R = 48;
+    // slide the rig along the *original* sun direction so the angle is bit-for-bit unchanged
+    sun.target.position.set(focus.x, focus.y - 1.2, focus.z);
+    sun.position.copy(sun.target.position).addScaledVector(this.sunDir, -this.sunDist);
+    const cam = sun.shadow.camera;
+    if (cam.left !== -R) {
+      cam.left = -R; cam.right = R; cam.top = R; cam.bottom = -R;
+      cam.near = 1; cam.far = this.sunDist + 120;
+      cam.updateProjectionMatrix();
+    }
+  }
+
   box(w, h, d, mat, x, y, z, { shadow = true, solid = true, occlude = false } = {}) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    const m = new THREE.Mesh(this.unitBox(), mat);
+    m.scale.set(w, h, d);
     m.position.set(x, y, z);
     if (shadow) { m.castShadow = true; m.receiveShadow = true; }
     this.scene.add(m);
@@ -171,7 +243,8 @@ export class World {
       const pl = new THREE.PointLight(0xffb86b, 12, 15, 1.8);
       pl.position.set(x, groundY + 4.4, z);
       this.scene.add(pl);
-      this.animated.push({ update: (t) => { pl.intensity = 11 + Math.sin(t * 13.7) * 1.2 + Math.sin(t * 7.3) * 0.8; } });
+      this.addCullableLight(pl);
+      this.animated.push({ update: (t) => { if (pl.visible) pl.intensity = 11 + Math.sin(t * 13.7) * 1.2 + Math.sin(t * 7.3) * 0.8; } });
     }
   }
 
@@ -344,6 +417,10 @@ export class World {
     sun.shadow.bias = -0.00045;
     this.scene.add(sun, sun.target);
     this.sun = sun;
+    // remember the art-directed sun angle: the shadow camera may follow the player, but the
+    // light direction (and therefore the whole mood) must never change.
+    this.sunDir = sun.target.position.clone().sub(sun.position).normalize();
+    this.sunDist = 150;
     this.scene.add(new THREE.AmbientLight(0x565b64, 0.55));
   }
 

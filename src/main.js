@@ -217,6 +217,49 @@ function findShivTarget() {
   return best;
 }
 
+// A body you put down can be searched once — the scavenging half of the crafting loop.
+// Corvos carried gear; the infected only have the rags and bottles they died holding.
+function findLootTarget() {
+  let best = null, bestD = Infinity;
+  for (const en of enemies) {
+    if (!en.dead || en.looted || en.deathT < 0.6) continue;
+    const d = Math.hypot(en.group.position.x - player.position.x, en.group.position.z - player.position.z);
+    if (d < 2.4 && Math.abs(en.group.position.y - player.position.y) < 2.5 && d < bestD) { bestD = d; best = en; }
+  }
+  return best;
+}
+
+function doLoot(target) {
+  target.looted = true;
+  audio.play('pickup');
+  const got = [];
+  const roll = () => Math.random();
+  if (target.type === 'corvo') {
+    // scavengers came equipped
+    if (roll() < 0.55 && weapons.owned.revolver) { weapons.addAmmo('revolver', 2); got.push({ en: 'revolver rounds ×2', pt: 'munições de revólver ×2' }); }
+    if (roll() < 0.3 && weapons.owned.shotgun) { weapons.addAmmo('shotgun', 1); got.push({ en: 'a shell', pt: 'um cartucho' }); }
+    if (roll() < 0.45) { player.addComponent('blade'); got.push({ en: 'a blade', pt: 'uma lâmina' }); }
+    if (roll() < 0.4) { player.addComponent('alcohol'); got.push({ en: 'alcohol', pt: 'álcool' }); }
+    if (roll() < 0.35) { player.addComponent('rag'); got.push({ en: 'a rag', pt: 'um pano' }); }
+    if (roll() < 0.2) { player.bandages++; got.push({ en: 'a bandage', pt: 'uma ligadura' }); }
+  } else {
+    if (roll() < 0.4) { player.addComponent('rag'); got.push({ en: 'a rag', pt: 'um pano' }); }
+    if (roll() < 0.28) { player.addComponent('scrap'); got.push({ en: 'scrap', pt: 'sucata' }); }
+    if (roll() < 0.16) { player.addComponent('alcohol'); got.push({ en: 'alcohol', pt: 'álcool' }); }
+  }
+  ui.setSupplies(player.bandages, player.bricks, player.molotovs);
+  ui.setShivs(player.shivs);
+  ui.setWeapon(weapons);
+  if (craftOpen) ui.renderCraft(player);
+  if (got.length === 0) {
+    ui.toast({ en: 'Nothing. Pockets already turned out.', pt: 'Nada. Já lhe viraram os bolsos.' });
+  } else {
+    const en = got.map((g) => g.en).join(', ');
+    const pt = got.map((g) => g.pt).join(', ');
+    ui.toast({ en: `Searched the body: ${en}.`, pt: `Revistaste o corpo: ${pt}.` });
+  }
+}
+
 function doTakedown(target) {
   target.silentKill();
   player.frozen = true;
@@ -262,7 +305,9 @@ document.addEventListener('keydown', (e) => {
     const sv = findShivTarget();
     if (sv) { doShivKill(sv); return; }
     const it = story.currentInteractable(player.position, player.forward());
-    if (it) it.action();
+    if (it) { it.action(); return; }
+    const body = findLootTarget();
+    if (body) doLoot(body);
   } else if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') {
     const n = Number(e.code.slice(-1));
     if (ui.dialogueActive && ui.choiceMode) { ui.pickChoice(n - 1); return; }
@@ -404,6 +449,9 @@ function frame() {
   const t = clock.elapsedTime;
 
   world.update(t, dt);
+  // keep only the nearby lights live and the shadow frustum tight around the player
+  world.updateLights(camera.position);
+  world.updateShadowCamera(player.position);
 
   if (started && !ended && !dead) {
     if (!paused) {
@@ -471,7 +519,9 @@ function frame() {
         ui.prompt({ en: 'Shiv kill', pt: 'Matar com a navalha' }, 'E');
       } else {
         const it = story.currentInteractable(player.position, player.forward());
-        ui.prompt(it ? it.prompt : null);
+        if (it) ui.prompt(it.prompt);
+        else if (findLootTarget()) ui.prompt({ en: 'Search the body', pt: 'Revistar o corpo' }, 'E');
+        else ui.prompt(null);
       }
       // crosshair tells you when the plank will actually connect
       ui.setMeleeReady(weapons.meleeReady());
@@ -503,4 +553,4 @@ let fpsFrames = 0, fpsLast = performance.now(), fpsValue = 0;
 frame();
 
 // Debug/testing hooks
-window.__game = { player, story, world, enemies, follower, weapons, ui, camera, scene, audio, grade, getFps: () => fpsValue };
+window.__game = { player, story, world, enemies, follower, weapons, ui, camera, scene, audio, grade, renderer, composer, getFps: () => fpsValue };

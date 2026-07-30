@@ -140,6 +140,7 @@ export class WeaponSystem {
     this.flash.visible = false;
     camera.add(this.flash);
     this.flashLight = new THREE.PointLight(0xffb060, 0, 14, 2);
+    this.flashLight.visible = false;   // only live during a shot
     camera.add(this.flashLight);
 
     this.aiming = false;      // aim-down-sights
@@ -295,7 +296,12 @@ export class WeaponSystem {
     this.recoilT = 1;
     this.audio?.play(this.active === 'shotgun' ? 'shotgunFire' : 'revolverFire');
 
-    // recoil kick to aim
+    // Aim is sampled BEFORE recoil — the shot goes where you were pointing, not where the
+    // gun kicked to. (Kicking first made every bullet land high by the full kick angle.)
+    const origin = this.camera.position.clone();
+    const baseFwd = this.forwardVec();
+
+    // recoil kick to aim (applies to the *next* shot)
     this.player.pitch = Math.min(1.45, this.player.pitch + w.kick);
     this.player.yaw += (Math.random() - 0.5) * w.kick * 0.5;
 
@@ -304,8 +310,6 @@ export class WeaponSystem {
 
     // hitscan pellets — aiming down sights tightens the spread sharply
     const spread = w.spread * (this.aiming ? 0.28 : 1);
-    const origin = this.camera.position.clone();
-    const baseFwd = this.forwardVec();
     for (let p = 0; p < w.pellets; p++) {
       const dir = baseFwd.clone();
       dir.x += (Math.random() - 0.5) * spread * 2;
@@ -390,6 +394,7 @@ export class WeaponSystem {
     this.flash.visible = true;
     this.flashLight.position.copy(muzzle);
     this.flashLight.intensity = this.active === 'shotgun' ? 40 : 26;
+    this.flashLight.visible = true;
     this.flashDecay = 1;
   }
 
@@ -419,7 +424,7 @@ export class WeaponSystem {
       this.flashDecay -= dt * 12;
       this.flash.material.opacity = Math.max(0, this.flashDecay);
       this.flashLight.intensity *= Math.max(0, this.flashDecay);
-      if (this.flashDecay <= 0) { this.flash.visible = false; this.flashLight.intensity = 0; }
+      if (this.flashDecay <= 0) { this.flash.visible = false; this.flashLight.intensity = 0; this.flashLight.visible = false; }
     }
 
     if (!this.active) return;

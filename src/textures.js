@@ -45,6 +45,7 @@ export function grassBladeTexture() {
   }
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 16;
   return tex;
 }
 
@@ -228,7 +229,7 @@ export function cobbleTexture(repeatX = 8, repeatY = 8) {
 
 // --- Granite blocks (bridge, quay wall, monuments) --------------------------
 export function graniteTexture(repeatX = 4, repeatY = 2) {
-  const [c, ctx] = makeCanvas(256, 128);
+  const [c, ctx] = makeCanvas(512, 256);
   ctx.fillStyle = '#8b8578';
   ctx.fillRect(0, 0, 256, 128);
   const bw = 64, bh = 32;
@@ -505,7 +506,7 @@ export function empenaTexture() {
 
 // Overgrown cobblestone: v1 cobbles + moss growing in the joints.
 export function mossyCobbleTexture(repeatX = 8, repeatY = 8) {
-  const [c, ctx] = makeCanvas(256, 256);
+  const [c, ctx] = makeCanvas(512, 512);
   ctx.fillStyle = '#3f3d3a';
   ctx.fillRect(0, 0, 256, 256);
   const size = 24;
@@ -526,7 +527,7 @@ export function mossyCobbleTexture(repeatX = 8, repeatY = 8) {
 
 // Bump map matching cobble layout (grayscale height).
 export function cobbleBumpTexture(repeatX = 8, repeatY = 8) {
-  const [c, ctx] = makeCanvas(256, 256);
+  const [c, ctx] = makeCanvas(512, 512);
   ctx.fillStyle = '#333';
   ctx.fillRect(0, 0, 256, 256);
   const size = 24;
@@ -546,6 +547,7 @@ export function cobbleBumpTexture(repeatX = 8, repeatY = 8) {
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(repeatX, repeatY);
+  tex.anisotropy = 16;
   return tex;
 }
 
@@ -611,7 +613,7 @@ export function azulejoMuralTexture() {
 
 // Interior stone floor (São Bento / caves)
 export function stoneFloorTexture(repeatX = 6, repeatY = 6) {
-  const [c, ctx] = makeCanvas(256, 256);
+  const [c, ctx] = makeCanvas(512, 512);
   ctx.fillStyle = '#6a655c';
   ctx.fillRect(0, 0, 256, 256);
   const s = 64;
@@ -650,6 +652,7 @@ export function ivyTexture() {
   }
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 16;
   return tex;
 }
 

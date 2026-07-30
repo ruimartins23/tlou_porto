@@ -1,21 +1,32 @@
 // CINZA — people, infected, and companion AI.
 import * as THREE from 'three';
 
+// Shared body materials/geometries. Every duplicate material makes Three.js re-upload the
+// whole light array for that draw, so bodies of the same colour reuse one material.
+const BODY_MATS = new Map();
+const bodyMat = (c) => {
+  let m = BODY_MATS.get(c);
+  if (!m) { m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.92 }); BODY_MATS.set(c, m); }
+  return m;
+};
+const GEO = {};
+const geo = (key, make) => (GEO[key] || (GEO[key] = make()));
+
 export function makePerson({ shirt = 0x5a6a8a, pants = 0x3a3a40, skin = 0xc9a184, hat = null, scale = 1 } = {}) {
   const g = new THREE.Group();
-  const mat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.92 });
-  const legGeo = new THREE.CylinderGeometry(0.09, 0.11, 0.82, 8);
+  const mat = bodyMat;
+  const legGeo = geo('leg', () => new THREE.CylinderGeometry(0.09, 0.11, 0.82, 8));
   for (const s of [-1, 1]) {
     const leg = new THREE.Mesh(legGeo, mat(pants));
     leg.position.set(s * 0.11, 0.41, 0);
     leg.castShadow = true;
     g.add(leg);
   }
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.26, 0.62, 10), mat(shirt));
+  const torso = new THREE.Mesh(geo('torso', () => new THREE.CylinderGeometry(0.21, 0.26, 0.62, 10)), mat(shirt));
   torso.position.y = 1.13;
   torso.castShadow = true;
   g.add(torso);
-  const armGeo = new THREE.CylinderGeometry(0.055, 0.07, 0.58, 6);
+  const armGeo = geo('arm', () => new THREE.CylinderGeometry(0.055, 0.07, 0.58, 6));
   for (const s of [-1, 1]) {
     const arm = new THREE.Mesh(armGeo, mat(shirt));
     arm.position.set(s * 0.3, 1.12, 0);
@@ -23,15 +34,15 @@ export function makePerson({ shirt = 0x5a6a8a, pants = 0x3a3a40, skin = 0xc9a184
     arm.castShadow = true;
     g.add(arm);
   }
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.155, 12, 10), mat(skin));
+  const head = new THREE.Mesh(geo('head', () => new THREE.SphereGeometry(0.155, 12, 10)), mat(skin));
   head.position.y = 1.62;
   head.castShadow = true;
   g.add(head);
   if (hat !== null) {
-    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.03, 10), mat(hat));
+    const brim = new THREE.Mesh(geo('brim', () => new THREE.CylinderGeometry(0.19, 0.19, 0.03, 10)), mat(hat));
     brim.position.y = 1.72;
     g.add(brim);
-    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.15, 0.12, 10), mat(hat));
+    const crown = new THREE.Mesh(geo('crown', () => new THREE.CylinderGeometry(0.13, 0.15, 0.12, 10)), mat(hat));
     crown.position.y = 1.78;
     g.add(crown);
   }
@@ -40,6 +51,8 @@ export function makePerson({ shirt = 0x5a6a8a, pants = 0x3a3a40, skin = 0xc9a184
   return g;
 }
 
+const FUNGAL_MAT = new THREE.MeshStandardMaterial({ color: 0xd0c090, roughness: 0.65, emissive: 0x201a08, emissiveIntensity: 0.5 });
+
 function makeInfected(type) {
   const grey = 0x8a8d84;
   const g = makePerson({
@@ -47,15 +60,16 @@ function makeInfected(type) {
     pants: 0x3a3832,
     skin: grey,
   });
-  const fungal = new THREE.MeshStandardMaterial({ color: 0xd0c090, roughness: 0.65, emissive: 0x201a08, emissiveIntensity: 0.5 });
+  const fungal = FUNGAL_MAT;
   if (type === 'eco') {
     // head consumed by plated growth — blind
     const head = g.children.find((c) => c.position.y === 1.62);
     if (head) head.visible = false;
     for (let i = 0; i < 6; i++) {
-      const plate = new THREE.Mesh(new THREE.SphereGeometry(0.11 + Math.random() * 0.08, 7, 5), fungal);
+      const plate = new THREE.Mesh(geo('blob', () => new THREE.SphereGeometry(1, 7, 5)), fungal);
+      const ps = 0.11 + Math.random() * 0.08;
       plate.position.set((Math.random() - 0.5) * 0.22, 1.55 + Math.random() * 0.22, (Math.random() - 0.5) * 0.22);
-      plate.scale.set(1, 0.7 + Math.random() * 0.5, 0.8);
+      plate.scale.set(ps, ps * (0.7 + Math.random() * 0.5), ps * 0.8);
       plate.castShadow = true;
       g.add(plate);
     }
@@ -68,14 +82,15 @@ function makeInfected(type) {
   } else {
     // errante: growths breaking through shoulder and half the face
     for (let i = 0; i < 3; i++) {
-      const blob = new THREE.Mesh(new THREE.SphereGeometry(0.07 + Math.random() * 0.06, 7, 5), fungal);
+      const blob = new THREE.Mesh(geo('blob', () => new THREE.SphereGeometry(1, 7, 5)), fungal);
+      blob.scale.setScalar(0.07 + Math.random() * 0.06);
       blob.position.set(0.12 + Math.random() * 0.1, 1.55 + Math.random() * 0.14, (Math.random() - 0.5) * 0.12);
       blob.castShadow = true;
       g.add(blob);
     }
-    const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.13, 7, 5), fungal);
+    const shoulder = new THREE.Mesh(geo('blob', () => new THREE.SphereGeometry(1, 7, 5)), fungal);
     shoulder.position.set(-0.26, 1.38, 0.05);
-    shoulder.scale.y = 0.7;
+    shoulder.scale.set(0.13, 0.13 * 0.7, 0.13);
     g.add(shoulder);
   }
   return g;
@@ -154,6 +169,7 @@ export class Enemy {
     this.active = true;
     this.dead = false;
     this.deathT = 0;
+    this.looted = false;   // bodies can be searched once
     this.ray = new THREE.Raycaster();
 
     // cover-combat state (Corvos)
@@ -175,6 +191,7 @@ export class Enemy {
       this.group.add(this.muzzle);
       this.muzzleLight = new THREE.PointLight(0xffb060, 0, 8, 2);
       this.muzzleLight.position.set(0.28, 1.15, 0.4);
+      this.muzzleLight.visible = false;   // a dark light still costs uniforms — hide it
       this.group.add(this.muzzleLight);
     }
   }
@@ -501,6 +518,7 @@ export class Enemy {
       if (this.muzzle && this.muzzle.material.opacity > 0) {
         this.muzzle.material.opacity = Math.max(0, this.muzzle.material.opacity - dt * 10);
         this.muzzleLight.intensity = Math.max(0, this.muzzleLight.intensity - dt * 90);
+        if (this.muzzleLight.intensity <= 0) this.muzzleLight.visible = false;
       }
     }
 
@@ -576,7 +594,7 @@ export class Enemy {
 
   corvoShoot(playerPos, d, onAttack) {
     this.audio?.play('corvoShot', this.group.position);
-    if (this.muzzle) { this.muzzle.material.opacity = 1; this.muzzleLight.intensity = 26; }
+    if (this.muzzle) { this.muzzle.material.opacity = 1; this.muzzleLight.intensity = 26; this.muzzleLight.visible = true; }
     if (this.onGunNoise) this.onGunNoise(this.group.position.clone(), 30); // wakes infected
     // accuracy falls with range and if the player is moving; cover shots are aimed
     const hitChance = Math.max(0.12, 0.82 - d / this.cfg.shootRange * 0.6);

@@ -4,13 +4,36 @@ import * as THREE from 'three';
 import { ruinFacadeTexture, empenaTexture, rand } from './textures.js';
 
 let sharedEmpenaTex = null;
+const EMPENA_MATS = new Map();
 function empenaMaterial(baseColor) {
   if (!sharedEmpenaTex) sharedEmpenaTex = empenaTexture();
-  return new THREE.MeshStandardMaterial({
-    map: sharedEmpenaTex,
-    color: new THREE.Color(baseColor).multiplyScalar(0.62).lerp(new THREE.Color(0xaaa294), 0.55),
-    roughness: 0.98,
-  });
+  let m = EMPENA_MATS.get(baseColor);
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({
+      map: sharedEmpenaTex,
+      color: new THREE.Color(baseColor).multiplyScalar(0.62).lerp(new THREE.Color(0xaaa294), 0.55),
+      roughness: 0.98,
+    });
+    EMPENA_MATS.set(baseColor, m);
+  }
+  return m;
+}
+
+// Facade materials are cached by their visual signature. A hundred houses only need a
+// couple of dozen distinct facades — and each duplicate would cost a texture upload plus
+// a full light-uniform upload every frame.
+const FACADE_MATS = new Map();
+function facadeMaterial(color, floors, cols, azulejo) {
+  const key = `${color}|${floors}|${cols}|${azulejo ? 1 : 0}`;
+  let m = FACADE_MATS.get(key);
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({
+      map: ruinFacadeTexture(color, floors, cols, azulejo),
+      roughness: azulejo ? 0.5 : 0.95,
+    });
+    FACADE_MATS.set(key, m);
+  }
+  return m;
 }
 
 // Ribeira's real palette — ochre, terracotta, river-blue, gold, sage, cream, salmon —
@@ -47,10 +70,8 @@ function ruinHouse(world, x, width, floors, colorIdx, {
   z = 12, faceDir = 1, depth = 11, groundY = 0, azulejo = false, gutted = false,
 } = {}) {
   const height = gutted ? floors * 3.1 * 0.45 : floors * 3.1;
-  const facadeMat = new THREE.MeshStandardMaterial({
-    map: ruinFacadeTexture(RUIN_COLORS[colorIdx % RUIN_COLORS.length], gutted ? 1 : floors, Math.max(2, Math.round(width / 2.6)), azulejo),
-    roughness: azulejo ? 0.5 : 0.95,
-  });
+  const facadeMat = facadeMaterial(
+    RUIN_COLORS[colorIdx % RUIN_COLORS.length], gutted ? 1 : floors, Math.max(2, Math.round(width / 2.6)), azulejo);
   const sideCol = empenaMaterial(RUIN_COLORS[colorIdx % RUIN_COLORS.length]);
   const mats = faceDir > 0
     ? [sideCol, sideCol, sideCol, sideCol, facadeMat, sideCol]
@@ -151,7 +172,8 @@ function buildRibeira(world) {
   const lamp = new THREE.PointLight(0xffa050, 14, 15, 1.8);
   lamp.position.set(-53.5, 2.4, 7.4);
   world.scene.add(lamp);
-  world.animated.push({ update: (t) => { lamp.intensity = 8 + Math.sin(t * 9.1) * 1.1 + Math.sin(t * 15.7) * 0.7; } });
+  world.addCullableLight(lamp);
+  world.animated.push({ update: (t) => { if (lamp.visible) lamp.intensity = 8 + Math.sin(t * 9.1) * 1.1 + Math.sin(t * 15.7) * 0.7; } });
   const flame = new THREE.Sprite(new THREE.SpriteMaterial({
     map: world.emberTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.85,
   }));
@@ -359,6 +381,7 @@ function buildSaoBento(world) {
     const pool = new THREE.PointLight(0xffe0a8, 14, 16, 2);
     pool.position.set(sx, FY + 3, sz);
     world.scene.add(pool);
+    world.addCullableLight(pool);
   }
 
   world.locations.stationDoor = new THREE.Vector3(48, 22, -130);
@@ -501,7 +524,8 @@ function buildSe(world) {
   const fire = new THREE.PointLight(0xff8038, 16, 14, 1.8);
   fire.position.set(70, 29.1, -56);
   world.scene.add(fire);
-  world.animated.push({ update: (t) => { fire.intensity = 14 + Math.sin(t * 11) * 2.5 + Math.sin(t * 23) * 1.5; } });
+  world.addCullableLight(fire, 1);
+  world.animated.push({ update: (t) => { if (fire.visible) fire.intensity = 14 + Math.sin(t * 11) * 2.5 + Math.sin(t * 23) * 1.5; } });
   const fireGlow = new THREE.Sprite(new THREE.SpriteMaterial({
     map: world.emberTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.9,
   }));
@@ -595,6 +619,7 @@ function buildGaia(world) {
     const pl = new THREE.PointLight(0xffa050, 8, 11, 2);
     pl.position.set(cx, 2, cz);
     world.scene.add(pl);
+    world.addCullableLight(pl);
     const fl = new THREE.Sprite(new THREE.SpriteMaterial({
       map: world.emberTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.7,
     }));

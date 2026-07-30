@@ -19,7 +19,7 @@ const GRAVITY = 22;
 // sprint stamina — generous enough for traversal bursts, but a marathon flee runs you dry
 const STAM_DRAIN = 15;   // per second while sprinting
 const STAM_REGEN = 20;   // per second while recovering
-const STAM_RECOVER = 28; // must reach this before you can sprint again after bottoming out
+const STAM_RECOVER = 55; // bottom out and you must genuinely catch your breath, not stutter-sprint
 
 export class Player {
   constructor(camera, world, audio) {
@@ -177,6 +177,7 @@ export class Player {
     const flame = new THREE.PointLight(0xff7a20, 5, 6, 2);
     flame.position.y = 0.18;
     grp.add(flame);
+    this.world.addCullableLight(flame, 2);
     grp.position.copy(this.position).addScaledVector(dir, 0.6);
     scene.add(grp);
     this.thrownMolotovs.push({ mesh: grp, vel: dir.multiplyScalar(12.5), alive: true, spin: Math.random() * 6 });
@@ -205,6 +206,7 @@ export class Player {
     light.position.y = 1.1;
     grp.add(light);
     scene.add(grp);
+    this.world.addCullableLight(light, 3);   // your own fire always wins a light slot
     this.fires.push({ grp, sprites, light, pos: pos.clone(), t: 0, life: 5.0, radius: 3.3, dmgT: 0 });
     if (this.onMolotovLand) this.onMolotovLand(pos.clone());   // loud — wakes/draws the block
   }
@@ -295,6 +297,7 @@ export class Player {
       const gy = this.groundHeightAt(p.x, p.z, p.y) ?? -2;
       if (hitEnemy || p.y <= gy + 0.1 || p.y < -1.8) {
         m.alive = false;
+        m.mesh.traverse((o) => { if (o.isLight) this.world.removeCullableLight(o); });
         scene.remove(m.mesh);
         this.igniteFire(scene, new THREE.Vector3(p.x, Math.max(gy, Math.min(p.y, gy + 0.1)), p.z));
       }
@@ -324,7 +327,7 @@ export class Player {
           }
         }
       }
-      if (f.t >= f.life) { scene.remove(f.grp); f.done = true; }
+      if (f.t >= f.life) { scene.remove(f.grp); this.world.removeCullableLight(f.light); f.done = true; }
     }
     this.fires = this.fires.filter((f) => !f.done);
   }
