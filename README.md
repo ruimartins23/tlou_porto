@@ -66,12 +66,13 @@ npm run preview   # serve the built bundle locally
 | **Left click** | Attack / fire |
 | **Right click** | Aim |
 | **1 2 3** | Switch weapon |
-| **E** | Interact / stealth takedown |
+| **E** | Interact / stealth takedown / shiv kill / search a body |
 | **R** | Reload |
 | **Q** | Throw brick (distraction) |
 | **G** | Throw molotov |
 | **H** | Bandage (heal) |
 | **F** | Flashlight |
+| **X** | Crafting kit |
 | **J** | Notebook (collected notes) |
 | **Esc** | Pause |
 
