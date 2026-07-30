@@ -110,6 +110,43 @@ function ruinHouse(world, x, width, floors, colorIdx, {
       world.scene.add(slab);
     }
   }
+  // ---- facade relief -------------------------------------------------------------
+  // Painted-on windows read as flat cardboard. Real Porto frontages are all edges:
+  // a granite plinth, sill bands, iron balconies, and a cornice throwing a hard
+  // shadow line under the eaves. These few boxes are what make a wall look built.
+  const front = z + faceDir * 0.06;            // just proud of the facade plane
+  const out = (n) => front + faceDir * n;      // push further out along the facing
+  const trim = world.mats.granite;
+  const floorsN = gutted ? 1 : floors;
+  // plinth at street level
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(width + 0.16, 0.72, 0.3), trim);
+  plinth.position.set(x, groundY + 0.36, front);
+  plinth.castShadow = true; plinth.receiveShadow = true;
+  world.scene.add(plinth);
+  // cornice under the roofline
+  const cornice = new THREE.Mesh(new THREE.BoxGeometry(width + 0.5, 0.34, 0.46), trim);
+  cornice.position.set(x, groundY + height - 0.2, out(0.06));
+  cornice.castShadow = true; cornice.receiveShadow = true;
+  world.scene.add(cornice);
+  // per-floor sill band, with an iron balcony on some floors
+  for (let f = 1; f < floorsN; f++) {
+    const fy = groundY + f * 3.1;
+    const sill = new THREE.Mesh(new THREE.BoxGeometry(width - 0.3, 0.13, 0.26), trim);
+    sill.position.set(x, fy + 0.55, front);
+    sill.castShadow = true;
+    world.scene.add(sill);
+    if (rand() < 0.5) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(width * 0.52, 0.52, 0.07), world.mats.iron);
+      rail.position.set(x + (rand() - 0.5) * width * 0.24, fy + 0.86, out(0.22));
+      rail.castShadow = true;
+      world.scene.add(rail);
+      const ledge = new THREE.Mesh(new THREE.BoxGeometry(width * 0.56, 0.1, 0.4), trim);
+      ledge.position.set(rail.position.x, fy + 0.6, out(0.14));
+      ledge.castShadow = true;
+      world.scene.add(ledge);
+    }
+  }
+
   // ivy climbing the facade
   if (rand() < 0.6) {
     const ix = x + (rand() - 0.5) * width * 0.6;
@@ -199,6 +236,14 @@ function buildRibeira(world) {
   flame.position.set(LX, LY + 0.07, LZ);
   world.scene.add(flame);
 
+  // ---- street life on the quay: kerb line, standing water, drifted debris
+  world.kerb(-110, -60, 12.6, 0, 'x');
+  world.kerb(-44, 96, 12.6, 0, 'x');
+  world.puddles(-108, 94, 14, 29, 0, 26);
+  world.debrisScatter(-108, 94, 13, 29, 0, 46);
+  world.puddles(-20, 30, -18, 10, 0, 10);
+  world.debrisScatter(-20, 30, -18, 10, 0, 20);
+
   // ---- Praça da Ribeira
   // o Cubo (dry fountain)
   const basin = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.8, 0.7, 16), M.graniteBig);
@@ -271,6 +316,11 @@ function buildBoats(world) {
 
 // ------------------------------------------------------------------ Largo (L1)
 function buildLargo(world) {
+  // wet cobbles and drifted rubbish give the largo depth the flat plane lacks
+  world.puddles(-28, 38, -88, -58, 12, 16);
+  world.debrisScatter(-28, 38, -88, -58, 12, 30);
+  world.kerb(-28, 38, -57.4, 12, 'x');
+
   const M = world.mats;
   // shop rows around the largo
   ruinRow(world, -28, 40, { z: -56.5, faceDir: 1, depth: 9, groundY: 12 }, [[6, 16]]);   // south row (above retaining wall, behind São João mouth)
@@ -407,6 +457,8 @@ function buildSaoBento(world) {
   world.locations.stationExit = new THREE.Vector3(65, 22, -114);
 
   // plaza dressing
+  world.puddles(-16, 44, -150, -114, 22, 16);
+  world.debrisScatter(-16, 44, -150, -114, 22, 30);
   world.carWreck(20, -134, 22, 0.9);
   world.carWreck(4, -122, 22, -0.5);
   world.rubblePile(-10, -140, 22, 3, 2, 14);
@@ -420,6 +472,9 @@ function buildSaoBento(world) {
 
 // ------------------------------------------------------------------ Sé (L3)
 function buildSe(world) {
+  world.puddles(58, 112, -82, -32, 28, 14);
+  world.debrisScatter(58, 112, -82, -32, 28, 28);
+
   const M = world.mats;
   const add = (m) => { world.scene.add(m); return m; };
   const lead = new THREE.MeshStandardMaterial({ color: 0x2b2e33, roughness: 0.55, metalness: 0.35 });
@@ -570,6 +625,9 @@ function buildSe(world) {
 
 // ------------------------------------------------------------------ Gaia
 function buildGaia(world) {
+  world.puddles(20, 120, 104, 144, 0, 14);
+  world.debrisScatter(20, 120, 104, 144, 0, 26);
+
   const M = world.mats;
   const X1 = 40, X2 = 85, Z1 = 122, Z2 = 146, H = 8;
   const wall = M.plaster;

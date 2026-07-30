@@ -264,15 +264,66 @@ export class World {
   }
 
   ivyPatch(x, y, z, w, h, rotY, depthOffset = 0.06) {
+    if (!this._ivyMat) this._ivyMat = new THREE.MeshStandardMaterial({ map: this.ivyTex, alphaTest: 0.5, roughness: 1, side: THREE.DoubleSide });
     const m = new THREE.Mesh(
       new THREE.PlaneGeometry(w, h),
-      new THREE.MeshStandardMaterial({ map: this.ivyTex, transparent: true, alphaTest: 0.4, roughness: 1, side: THREE.DoubleSide })
+      this._ivyMat
     );
     m.position.set(x, y, z);
     m.rotation.y = rotY;
     m.translateZ(depthOffset);
     this.scene.add(m);
     return m;
+  }
+
+  // ---- street dressing ------------------------------------------------------------
+  // A tiled plane reads as flat no matter how good the tile is. What sells a street is
+  // what has collected ON it: standing water that catches the sky, kerbs that cut a
+  // shadow line, and eight years of debris drifted into the joints.
+  puddles(x1, x2, z1, z2, y, count = 10) {
+    if (!this._puddleMat) {
+      this._puddleMat = new THREE.MeshStandardMaterial({
+        color: 0x2b2f33, roughness: 0.08, metalness: 0.55,
+        transparent: true, opacity: 0.75, polygonOffset: true, polygonOffsetFactor: -2,
+      });
+    }
+    if (!this._puddleGeo) this._puddleGeo = new THREE.CircleGeometry(1, 14);
+    for (let i = 0; i < count; i++) {
+      const m = new THREE.Mesh(this._puddleGeo, this._puddleMat);
+      m.rotation.x = -Math.PI / 2;
+      m.rotation.z = rand() * Math.PI;
+      m.position.set(x1 + rand() * (x2 - x1), y + 0.012, z1 + rand() * (z2 - z1));
+      m.scale.set(0.7 + rand() * 2.2, 0.5 + rand() * 1.6, 1);
+      m.receiveShadow = false;
+      this.scene.add(m);
+    }
+  }
+
+  // flat scatter: broken roof tile, splintered board, torn paper, drifted grit
+  debrisScatter(x1, x2, z1, z2, y, count = 24) {
+    const mats = [this.mats.roof, this.mats.woodDark, this.mats.rubbleRock, this.mats.dark];
+    for (let i = 0; i < count; i++) {
+      const mat = mats[Math.floor(rand() * mats.length)];
+      const w = 0.18 + rand() * 0.55, d = 0.14 + rand() * 0.5;
+      const m = new THREE.Mesh(this.unitBox(), mat);
+      m.scale.set(w, 0.05 + rand() * 0.07, d);
+      m.position.set(x1 + rand() * (x2 - x1), y + 0.03, z1 + rand() * (z2 - z1));
+      m.rotation.y = rand() * Math.PI;
+      m.rotation.z = (rand() - 0.5) * 0.12;
+      m.castShadow = true; m.receiveShadow = true;
+      this.scene.add(m);
+    }
+  }
+
+  // granite kerb: a raised edge between pavement and road, running along z at fixed x
+  // (axis 'x' runs along x at fixed z)
+  kerb(a1, a2, fixed, y, axis = 'x', h = 0.16) {
+    const len = a2 - a1;
+    const m = new THREE.Mesh(this.unitBox(), this.mats.granite);
+    if (axis === 'x') { m.scale.set(len, h, 0.42); m.position.set((a1 + a2) / 2, y + h / 2, fixed); }
+    else { m.scale.set(0.42, h, len); m.position.set(fixed, y + h / 2, (a1 + a2) / 2); }
+    m.castShadow = true; m.receiveShadow = true;
+    this.scene.add(m);
   }
 
   lamp(x, z, groundY, { light = false, broken = false } = {}) {
@@ -434,25 +485,72 @@ export class World {
           vDir = normalize(position);
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }`,
+      uniforms: { uTime: { value: 0 } },
       fragmentShader: `
         varying vec3 vDir;
+        uniform float uTime;
+
+        // value noise + fbm — enough for drifting ash cloud, cheap enough for a skybox
+        float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+        float noise(vec2 p){
+          vec2 i = floor(p), f = fract(p);
+          vec2 u = f * f * (3.0 - 2.0 * f);
+          return mix(mix(hash(i), hash(i + vec2(1,0)), u.x),
+                     mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), u.x), u.y);
+        }
+        float fbm(vec2 p){
+          float v = 0.0, a = 0.5;
+          for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.03; a *= 0.5; }
+          return v;
+        }
+
         void main() {
-          float h = clamp(vDir.y, -0.1, 1.0);
-          vec3 zenith = vec3(0.32, 0.36, 0.42);
-          vec3 mid    = vec3(0.62, 0.58, 0.52);
-          vec3 horizon= vec3(0.92, 0.72, 0.48);
-          vec3 col = mix(horizon, mid, smoothstep(0.0, 0.18, h));
-          col = mix(col, zenith, smoothstep(0.12, 0.7, h));
+          vec3 d = normalize(vDir);
+          float h = clamp(d.y, -0.15, 1.0);
           vec3 sunDir = normalize(vec3(-0.75, 0.28, 0.35));
-          float s = max(dot(normalize(vDir), sunDir), 0.0);
-          col += vec3(1.0, 0.82, 0.55) * pow(s, 90.0) * 0.55;
-          col += vec3(0.9, 0.6, 0.35) * pow(s, 10.0) * 0.10;
-          // faint cloud bands
-          float band = sin(vDir.y * 26.0 + vDir.x * 6.0) * 0.5 + 0.5;
-          col = mix(col, col * 1.06, band * smoothstep(0.05, 0.4, h) * 0.35);
+          float s = max(dot(d, sunDir), 0.0);
+
+          // vertical ramp — deep ash-blue overhead into a smoke-lit horizon
+          vec3 zenith  = vec3(0.17, 0.22, 0.33);
+          vec3 mid     = vec3(0.48, 0.48, 0.49);
+          vec3 horizon = vec3(0.95, 0.74, 0.49);
+          vec3 col = mix(horizon, mid, smoothstep(0.0, 0.22, h));
+          col = mix(col, zenith, smoothstep(0.14, 0.78, h));
+          // the sun side of the sky glows warmer all the way up
+          col = mix(col, col * vec3(1.16, 1.03, 0.88), pow(s, 2.0) * 0.55);
+
+          // cloud deck: two fbm layers drifting at different speeds, projected on the dome
+          vec2 sky = d.xz / max(abs(d.y) + 0.16, 0.001);
+          float t = uTime * 0.004;
+          float deck  = fbm(sky * 0.42 + vec2(t, t * 0.6));      // big slow shapes
+          float wisps = fbm(sky * 1.6 - vec2(t * 1.7, t * 0.4));  // torn detail on top
+          float mass  = deck * 0.86 + wisps * 0.26;
+          float cloud = smoothstep(0.30, 0.62, mass);
+          cloud *= smoothstep(0.01, 0.14, h);
+          // lit from the sun side, dark and heavy away from it
+          // heavy ash cloud: dark bellies, bright where the sun catches the tops
+          vec3 cloudLit  = vec3(1.10, 0.94, 0.76);
+          vec3 cloudDark = vec3(0.21, 0.22, 0.26);
+          vec3 cloudCol = mix(cloudDark, cloudLit, pow(s, 1.3) * 0.9 + 0.12);
+          // shade the underside by how deep into the mass we are
+          cloudCol *= 0.72 + 0.5 * smoothstep(0.42, 0.85, mass);
+          col = mix(col, cloudCol, cloud);
+          // torn edges: a second, sharper cut adds bright rims where the deck breaks
+          float rim = smoothstep(0.60, 0.78, mass) * (1.0 - smoothstep(0.78, 0.9, mass));
+          col += vec3(0.20, 0.16, 0.11) * rim * pow(s, 1.2);
+
+          // sun: a soft disc with a wide halo, dimmed where cloud covers it
+          float disc = smoothstep(0.9975, 0.9995, s);
+          col += vec3(1.0, 0.86, 0.6) * disc * (1.0 - cloud * 0.85) * 1.4;
+          col += vec3(1.0, 0.78, 0.5) * pow(s, 26.0) * 0.35 * (1.0 - cloud * 0.6);
+          col += vec3(0.95, 0.66, 0.4) * pow(s, 5.0) * 0.10;
+
+          // dirty haze sitting on the skyline
+          col = mix(col, vec3(0.88, 0.80, 0.70), smoothstep(0.10, -0.10, h) * 0.75);
           gl_FragColor = vec4(col, 1.0);
         }`,
     });
+    this.skyMat = mat;
     this.scene.add(new THREE.Mesh(geo, mat));
     this.scene.fog = new THREE.Fog(0x9a9184, 42, 380);
   }
@@ -902,5 +1000,6 @@ export class World {
 
   update(t, dt) {
     for (const a of this.animated) a.update(t, dt);
+    if (this.skyMat) this.skyMat.uniforms.uTime.value = t;   // clouds drift
   }
 }
