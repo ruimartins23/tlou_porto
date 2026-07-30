@@ -14,6 +14,8 @@ You play Inês, a smuggler escorting a girl and a cure across the corpse of the 
 The route follows the actual city:
 **Cais da Ribeira → Rua de São João → Largo de São Domingos → Rua das Flores → São Bento station → Terreiro da Sé → Escadas do Codeçal → Ponte Luís I → the Gaia caves.**
 
+Off the Praça de Almeida Garrett, **Rua de Sá da Bandeira** climbs north to the **Mercado do Bolhão** — an optional detour into the old market quarter. Survivors ran a barter post there for two years before it fell. It holds the richest scavenging in the city, a maze of stalls to sneak through, and walkable upper galleries you can work above the infected.
+
 ### Three things hunt you
 - **Errantes** (runners) — fast, they see and swarm you. Loud, and they bring friends.
 - **Ecos** (clickers) — blind but lethal; two hits and you're gone. They hunt by sound alone. Crouch, or die.
@@ -25,9 +27,12 @@ The route follows the actual city:
 - **Listen Mode** (hold `V`) — TLOU-style focus: the world drains to cold monochrome and enemies glow through walls, colour-coded by how alert they are.
 - **Stealth takedowns** — approach an unaware enemy from behind and take them silently.
 - **Sprint stamina** — you can outrun a chaser in a burst, but not forever; sprinting is loud and drains fast.
-- **Improvised arsenal** — a nail-studded plank (with real hit feedback), a revolver, a sawn-off shotgun, distraction **bricks**, and **molotovs** that pool into fire and clear a whole pack.
+- **Improvised arsenal** — a nail-studded plank (with real hit feedback), a revolver, a sawn-off shotgun, distraction **bricks**, **molotovs** that pool into fire and clear a whole pack, and **shivs** that kill anything up close even when it has already seen you.
+- **Crafting** (`X`) — scavenge rags, alcohol, blades and scrap, then build bandages, molotovs or shivs. Components are shared between recipes, so every craft is a real choice.
+- **Scavenging** — search the bodies you put down for parts, ammo and bandages. Scavengers came equipped; the infected only carry what they died holding.
 - **Survival economy** — scarce bandages, ammo, and throwables scattered across the ruins.
-- **14 hidden notes** — the city's last writings, telling the story of how Porto fell, for you to find.
+- **15 hidden notes** — the city's last writings, telling the story of how Porto fell, for you to find.
+- **Readable combat** — a directional arc shows which way a hit came from, the crosshair tells you when a melee swing will connect, and shots land exactly where you aim.
 - **Cinematic presentation** — HDR bloom, a custom colour-grade shader, positional 3D audio, and procedurally-built landmarks (twin-towered Sé, the crescent iron bridge, azulejo-tiled São Bento).
 - **Fully bilingual** — English / European Portuguese, switchable live.
 
