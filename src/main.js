@@ -18,6 +18,7 @@ import { UI } from './ui.js';
 import { Lang, setLang, tr, UI_TEXT } from './lang.js';
 import { Settings, loadSettings, saveSettings, applySettings } from './settings.js';
 import { hasSave, saveGame, loadGame, clearSave } from './save.js';
+import { Tutorial } from './tutorial.js';
 
 // ---------------------------------------------------------------- localization
 const CONTROLS = {
@@ -192,6 +193,7 @@ for (const e of enemies) e.onSpotted = (pos, type) => {
 let combatArmed = false;
 for (const e of enemies) e.setActive(false);
 
+const tutorial = new Tutorial();
 let listening = false;
 const LISTEN_RANGE = 30;   // how far focus senses the infected
 let paused = false;
@@ -259,6 +261,18 @@ function findShivTarget() {
     if (d < 2.1 && Math.abs(en.group.position.y - player.position.y) < 2 && d < bestD) { bestD = d; best = en; }
   }
   return best;
+}
+
+// Which ambience belongs where you are standing. Interiors get room tone, the quays get
+// the river, the bridge gets the herd under the wind.
+function zoneFor(p) {
+  if (p.z > 96) return 'caves';                                  // Gaia bank + cellars
+  if (p.x > 104 && p.z > 8 && p.z < 100) return 'bridge';        // the deck
+  if (p.z < -160) return 'market';                               // Bolhão
+  if (p.x > 48 && p.x < 92 && p.z < -110 && p.z > -152) return 'station';
+  if (p.y > 25 && p.z > -90 && p.z < -26) return 'se';           // Sé terrace
+  if (p.y < 4 && p.z > -22) return 'ribeira';                    // the quay
+  return 'city';
 }
 
 // Screen-relative bearing of a world position: 0 = dead ahead, +right, -left.
@@ -487,6 +501,7 @@ $('btn-start').addEventListener('click', (e) => {
       ui.setSupplies(player.bandages, player.bricks, player.molotovs);
       ui.setShivs(player.shivs);
       ui.setWeapon(weapons);
+      tutorial.skipAll();
       ui.toast({ en: 'Picking up where you left off.', pt: 'A retomar de onde ficaste.' });
     } else {
       story.begin();
@@ -557,6 +572,7 @@ function frame() {
       story.update(t, dt, player.position);
       follower.update(dt, t, player.position, player.yaw, player.moving);
       audio.tick(dt);
+      audio.setZone(zoneFor(player.position));
       ui.setWeapon(weapons); // keep reload/ammo readout live
       audio.setHeartbeat(player.health > 0 && player.health <= 30);
 
@@ -618,6 +634,10 @@ function frame() {
       ui.setCrouched(player.crouching);
       ui.setListening(listening);
       ui.setStamina(player.stamina, player.maxStamina, player.staminaLock);
+      ui.setTutorial(tutorial.update(dt, {
+        stage: story.stage, crouching: player.crouching, listening,
+        craftOpen, components: Object.values(player.components).reduce((a, b) => a + b, 0),
+      }));
       ui.updateMarker(camera, story.markerTarget(), player.position);
     }
   } else if (!started) {

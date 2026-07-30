@@ -90,6 +90,21 @@ export class UI {
     $('crouch-ind').style.opacity = on ? 1 : 0;
   }
 
+  // the opening lessons — a persistent line that clears when the player does the thing
+  setTutorial(text) {
+    const el = $('tutorial');
+    if (!el) return;
+    const str = text ? tr(text) : '';
+    if (str === this._tut) return;
+    this._tut = str;
+    if (str) {
+      el.innerHTML = str.replace(/\[([^\]]+)\]/g, '<b>$1</b>');
+      el.classList.add('show');
+    } else {
+      el.classList.remove('show');
+    }
+  }
+
   setListening(on) {
     if (this._listening === on) return;
     this._listening = on;

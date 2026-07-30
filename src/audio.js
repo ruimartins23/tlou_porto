@@ -39,43 +39,86 @@ export class GameAudio {
     return buf;
   }
 
-  startAmbience() {
-    // river hush
+  // ---- ambience beds -------------------------------------------------------------
+  // One bed for the whole city made every district sound identical. Each zone now mixes
+  // its own set of loops, crossfaded over a couple of seconds as you move between them.
+  makeBed({ filter = 'lowpass', freq = 360, q = 0.7, gain = 0, lfoRate = 0.09, lfoDepth = 80 }) {
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuffer(4);
     src.loop = true;
     const filt = this.ctx.createBiquadFilter();
-    filt.type = 'lowpass';
-    filt.frequency.value = 360;
-    const gain = this.ctx.createGain();
-    gain.gain.value = 0.28;
-    const lfo = this.ctx.createOscillator();
-    lfo.frequency.value = 0.09;
-    const lfoGain = this.ctx.createGain();
-    lfoGain.gain.value = 80;
-    lfo.connect(lfoGain).connect(filt.frequency);
-    src.connect(filt).connect(gain).connect(this.master);
+    filt.type = filter;
+    filt.frequency.value = freq;
+    filt.Q.value = q;
+    const g = this.ctx.createGain();
+    g.gain.value = gain;
+    if (lfoDepth > 0) {
+      const lfo = this.ctx.createOscillator();
+      lfo.frequency.value = lfoRate;
+      const lg = this.ctx.createGain();
+      lg.gain.value = lfoDepth;
+      lfo.connect(lg).connect(filt.frequency);
+      lfo.start();
+    }
+    src.connect(filt).connect(g).connect(this.master);
     src.start();
-    lfo.start();
+    return { gain: g, target: gain };
+  }
 
-    // desolate wind — stronger than v1, it carries the mood
-    const wind = this.ctx.createBufferSource();
-    wind.buffer = this.noiseBuffer(3);
-    wind.loop = true;
-    const wf = this.ctx.createBiquadFilter();
-    wf.type = 'bandpass';
-    wf.frequency.value = 700;
-    wf.Q.value = 0.5;
-    const wg = this.ctx.createGain();
-    wg.gain.value = 0.09;
-    const wlfo = this.ctx.createOscillator();
-    wlfo.frequency.value = 0.06;
-    const wlfoG = this.ctx.createGain();
-    wlfoG.gain.value = 300;
-    wlfo.connect(wlfoG).connect(wf.frequency);
-    wind.connect(wf).connect(wg).connect(this.master);
-    wind.start();
-    wlfo.start();
+  startAmbience() {
+    this.beds = {
+      // water moving past stone — the Douro, heard from the quays and the bridge
+      river: this.makeBed({ filter: 'lowpass', freq: 360, gain: 0, lfoRate: 0.09, lfoDepth: 80 }),
+      // open wind over rooftops and terraces
+      wind:  this.makeBed({ filter: 'bandpass', freq: 700, q: 0.5, gain: 0, lfoRate: 0.06, lfoDepth: 300 }),
+      // enclosed room tone: the station hall, the market, the cellars
+      room:  this.makeBed({ filter: 'lowpass', freq: 190, gain: 0, lfoRate: 0.04, lfoDepth: 40 }),
+      // the herd: hundreds of feet dragging, felt more than heard
+      herd:  this.makeBed({ filter: 'bandpass', freq: 240, q: 0.9, gain: 0, lfoRate: 0.5, lfoDepth: 120 }),
+    };
+    this.zone = null;
+    this.spotT = 4;
+    this.setZone('ribeira');
+  }
+
+  // mix per zone — [river, wind, room, herd]
+  setZone(zone) {
+    if (!this.ctx || !this.beds || this.zone === zone) return;
+    this.zone = zone;
+    const MIX = {
+      ribeira: [0.30, 0.07, 0.00, 0.00],
+      city:    [0.07, 0.13, 0.02, 0.00],
+      station: [0.00, 0.03, 0.15, 0.00],
+      market:  [0.00, 0.05, 0.11, 0.00],
+      se:      [0.05, 0.16, 0.00, 0.00],
+      bridge:  [0.26, 0.19, 0.00, 0.10],
+      caves:   [0.02, 0.02, 0.17, 0.00],
+    };
+    const m = MIX[zone] || MIX.city;
+    const keys = ['river', 'wind', 'room', 'herd'];
+    keys.forEach((k, i) => { if (this.beds[k]) this.beds[k].target = m[i]; });
+  }
+
+  // a zone-flavoured one-shot: gulls on the water, crows in the streets, drips indoors,
+  // iron complaining on the bridge, masonry letting go somewhere out of sight
+  ambientSpot() {
+    const z = this.zone;
+    const r = Math.random();
+    if (z === 'ribeira') {
+      if (r < 0.5) { this.blip(1500 + Math.random() * 400, 0.5, 0.05, 'sawtooth', 0, 900); this.blip(1300, 0.4, 0.035, 'sawtooth', 0.42, 800); }
+      else this.noiseBurst(1.4, 0.03, 420, 0, 'lowpass');
+    } else if (z === 'station' || z === 'caves' || z === 'market') {
+      if (r < 0.55) { this.blip(2100, 0.05, 0.05, 'sine', 0, 700); }        // a drip
+      else if (r < 0.8) this.noiseBurst(0.9, 0.025, 220, 0, 'lowpass');      // settling dust
+      else this.blip(120, 0.7, 0.035, 'triangle', 0, 80);                    // something shifting
+    } else if (z === 'bridge') {
+      if (r < 0.5) { this.blip(180, 1.6, 0.05, 'sawtooth', 0, 120); }        // iron groan
+      else this.noiseBurst(1.8, 0.03, 300, 0, 'lowpass');
+    } else {
+      if (r < 0.35) this.crowCry();
+      else if (r < 0.6) this.noiseBurst(1.6, 0.028, 500, 0, 'lowpass');      // distant collapse
+      else this.blip(90, 1.1, 0.03, 'triangle', 0, 60);                      // a timber giving
+    }
   }
 
   blip(freq, dur, gainV, type = 'sine', when = 0, freqEnd = null) {
@@ -135,10 +178,18 @@ export class GameAudio {
 
   tick(dt) {
     if (!this.ctx) return;
-    this.crowT -= dt;
-    if (this.crowT <= 0) {
-      this.crowT = 9 + Math.random() * 16;
-      this.crowCry();
+    // ease each bed toward its zone target
+    if (this.beds) {
+      for (const k in this.beds) {
+        const b = this.beds[k];
+        const v = b.gain.gain.value;
+        if (Math.abs(v - b.target) > 0.0005) b.gain.gain.value = v + (b.target - v) * Math.min(1, dt * 0.7);
+      }
+    }
+    this.spotT -= dt;
+    if (this.spotT <= 0) {
+      this.spotT = 7 + Math.random() * 13;
+      this.ambientSpot();
     }
     if (this.heartbeatOn) {
       this.heartT -= dt;

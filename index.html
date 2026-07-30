@@ -100,6 +100,16 @@
   }
   #detect > div { height: 100%; width: 0%; background: linear-gradient(90deg, #b8a05c, #b13a2a); transition: width 0.1s linear; }
 
+  #tutorial {
+    position: absolute; top: 62%; left: 50%; transform: translateX(-50%);
+    color: #e9e0c8; font-size: 15px; letter-spacing: 0.4px; text-align: center;
+    background: rgba(8,8,10,0.72); padding: 9px 22px; border-radius: 2px;
+    border: 1px solid rgba(184,160,92,0.45); text-shadow: 0 1px 4px #000;
+    opacity: 0; transition: opacity 0.35s; pointer-events: none; max-width: 70%;
+  }
+  #tutorial.show { opacity: 1; }
+  #tutorial b { color: #d8bf72; font-family: monospace; }
+
   #fps {
     position: absolute; top: 10px; right: 14px; display: none;
     color: #9fe0a0; font-family: ui-monospace, Menlo, monospace; font-size: 12px;
@@ -329,6 +339,7 @@
     </div>
     <div id="dmg-dir"><div class="arc"></div></div>
     <div id="fps"></div>
+    <div id="tutorial"></div>
     <div id="detect"><div></div></div>
     <div id="marker">◆<span class="dist"></span></div>
     <div id="toast"></div>

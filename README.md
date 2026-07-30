@@ -33,7 +33,10 @@ Off the Praça de Almeida Garrett, **Rua de Sá da Bandeira** climbs north to th
 - **Survival economy** — scarce bandages, ammo, and throwables scattered across the ruins.
 - **15 hidden notes** — the city's last writings, telling the story of how Porto fell, for you to find.
 - **Readable combat** — a directional arc shows which way a hit came from, the crosshair tells you when a melee swing will connect, and shots land exactly where you aim.
-- **Cinematic presentation** — HDR bloom, a custom colour-grade shader, positional 3D audio, and procedurally-built landmarks (twin-towered Sé, the crescent iron bridge, azulejo-tiled São Bento).
+- **Cinematic presentation** — HDR bloom, a custom colour-grade shader, and procedurally-built landmarks (twin-towered Sé, the crescent iron bridge, azulejo-tiled São Bento).
+- **Ambience that changes with the ground under you** — the river on the quays, wind across the terraces, room tone and dripping in the station and the cellars, the herd rumbling under the bridge. Every district mixes its own beds and its own stray sounds, crossfading as you move.
+- **Taught by playing** — the opening lessons wait for you to actually crouch, listen and craft rather than flashing a message you can miss, and step aside on their own if you already know the game.
+- **Saves and settings** — checkpoint saves with Continue on the title screen, plus mouse sensitivity, brightness, volume and a graphics-quality preset.
 - **Fully bilingual** — English / European Portuguese, switchable live.
 
 ## Run it
