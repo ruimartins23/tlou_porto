@@ -32,6 +32,7 @@ export class Story {
     this.endingChoice = null;
     this.checkpoint = { pos: new THREE.Vector3(-52, 0, 10), yaw: 2.6, stage: 0 };
     this.onStageChange = null;
+    this.onCheckpoint = null;
     this.onGameEnd = null;
     this.flags = {};
     this.subMarker = null;   // mid-stage objective waypoint (overrides markerTarget)
@@ -792,6 +793,7 @@ export class Story {
 
   setCheckpoint(pos, yaw, stage) {
     this.checkpoint = { pos: pos.clone(), yaw, stage };
+    this.onCheckpoint?.();      // main autosaves here
   }
 
   setStage(n) {

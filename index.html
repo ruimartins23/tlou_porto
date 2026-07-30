@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CINZA — uma história do Porto</title>
+<meta name="description" content="A first-person survival narrative set in a post-outbreak Porto. Escort Beatriz and a cure across the ruined city, from the Cais da Ribeira to the wine caves of Gaia.">
+<meta name="theme-color" content="#0b0b0d">
+<meta property="og:title" content="CINZA — uma história do Porto">
+<meta property="og:description" content="A first-person survival narrative set in a post-outbreak Porto. Built from scratch in Three.js — every building, texture and sound generated in code.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230b0b0d'/><text x='16' y='23' font-family='Georgia,serif' font-size='20' fill='%23b8a05c' text-anchor='middle'>C</text></svg>">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: #0b0b0d; }
@@ -220,6 +227,37 @@
   .recipe .rhave { flex: 0 0 auto; font-family: monospace; font-size: 12px; color: rgba(230,221,200,0.5); }
   #craft-close { margin-top: 20px; color: rgba(230,221,200,0.35); font-size: 12px; font-family: monospace; }
 
+  /* ---------- Settings ---------- */
+  #settings { position: fixed; inset: 0; display: none; background: rgba(4,4,6,0.88); backdrop-filter: blur(3px); z-index: 60; }
+  #settings-inner {
+    max-width: 520px; margin: 9vh auto; background: #131118; border: 1px solid rgba(184,160,92,0.3);
+    border-radius: 3px; padding: 30px 40px; box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+  }
+  #settings-inner h2 { color: #b8a05c; font-size: 18px; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 20px; }
+  .setrow { margin-bottom: 20px; }
+  .setrow label { display: flex; justify-content: space-between; color: #e6ddc8; font-size: 14px; margin-bottom: 7px; }
+  .setrow label span.val { color: #b8a05c; font-family: monospace; }
+  .setrow input[type=range] { width: 100%; accent-color: #b8a05c; cursor: pointer; }
+  .qbtns { display: flex; gap: 8px; }
+  .qbtn {
+    flex: 1; padding: 8px 0; text-align: center; cursor: pointer; font-family: inherit; font-size: 13px;
+    color: rgba(230,221,200,0.65); background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(230,221,200,0.16); border-radius: 3px;
+  }
+  .qbtn.on { color: #f0e6cc; border-color: rgba(184,160,92,0.75); background: rgba(184,160,92,0.16); }
+  #settings-close { margin-top: 8px; }
+
+  /* ---------- Loading ---------- */
+  #loading {
+    position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; background: #08080a; transition: opacity 0.6s;
+  }
+  #loading.done { opacity: 0; pointer-events: none; }
+  #loading .title { color: #e6ddc8; font-size: 40px; letter-spacing: 18px; padding-left: 18px; margin-bottom: 26px; }
+  #loading .bar { width: 240px; height: 3px; background: rgba(230,221,200,0.16); border-radius: 2px; overflow: hidden; }
+  #loading .bar > div { height: 100%; width: 0%; background: #b8a05c; transition: width 0.25s; }
+  #loading .msg { color: rgba(230,221,200,0.42); font-size: 12px; font-style: italic; margin-top: 14px; letter-spacing: 1px; }
+
   /* ---------- Screens ---------- */
   .screen {
     position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column;
@@ -309,6 +347,39 @@
     </div>
   </div>
 
+  <div id="loading">
+    <div class="title">CINZA</div>
+    <div class="bar"><div id="loading-bar"></div></div>
+    <div class="msg" id="loading-msg" data-i18n="loadingBuild">building Porto…</div>
+  </div>
+
+  <div id="settings">
+    <div id="settings-inner">
+      <h2 data-i18n="settingsTitle">Settings</h2>
+      <div class="setrow">
+        <label><span data-i18n="setSensitivity">Mouse sensitivity</span><span class="val" id="val-sens">1.00</span></label>
+        <input type="range" id="set-sens" min="0.2" max="3" step="0.05" value="1">
+      </div>
+      <div class="setrow">
+        <label><span data-i18n="setBrightness">Brightness</span><span class="val" id="val-bright">1.00</span></label>
+        <input type="range" id="set-bright" min="0.6" max="1.8" step="0.05" value="1">
+      </div>
+      <div class="setrow">
+        <label><span data-i18n="setVolume">Volume</span><span class="val" id="val-vol">100%</span></label>
+        <input type="range" id="set-vol" min="0" max="1.5" step="0.05" value="1">
+      </div>
+      <div class="setrow">
+        <label><span data-i18n="setQuality">Graphics quality</span></label>
+        <div class="qbtns">
+          <div class="qbtn" data-q="low" data-i18n="qLow">Low</div>
+          <div class="qbtn" data-q="medium" data-i18n="qMedium">Medium</div>
+          <div class="qbtn" data-q="high" data-i18n="qHigh">High</div>
+        </div>
+      </div>
+      <button class="btn" id="btn-settings-close" data-i18n="setClose">Close</button>
+    </div>
+  </div>
+
   <div id="craft">
     <div id="craft-inner">
       <h2 data-i18n="craftTitle">Craft</h2>
@@ -342,7 +413,9 @@
       and what he asks of you weighs more than the city:
       his daughter, and a notebook that could end the plague.
     </div>
+    <button class="btn" id="btn-continue" data-i18n="continueRun" style="display:none">Continue</button>
     <button class="btn" id="btn-start" data-i18n="begin">Begin</button>
+    <button class="btn" id="btn-settings" data-i18n="settingsTitle">Settings</button>
     <div class="controls-hint" id="controls-hint-title"></div>
     <div id="loading-note" data-i18n="loadingNote">Aim for the head. Take them silently from behind. Runners are loud; walkers live longer.</div>
   </div>
@@ -351,6 +424,7 @@
     <h1 style="font-size:32px;letter-spacing:8px" data-i18n="paused">Paused</h1>
     <div class="tagline" id="pause-obj"></div>
     <button class="btn" id="btn-resume" data-i18n="resume">Resume</button>
+    <button class="btn" id="btn-settings-pause" data-i18n="settingsTitle">Settings</button>
     <div class="controls-hint" id="controls-hint-pause"></div>
   </div>
 

@@ -81,8 +81,9 @@ export class Player {
 
     document.addEventListener('mousemove', (e) => {
       if (!this.canControl) return;
-      this.yaw -= e.movementX * 0.0023;
-      this.pitch -= e.movementY * 0.0023;
+      const sens = 0.0023 * (this.sensitivity ? this.sensitivity() : 1);
+      this.yaw -= e.movementX * sens;
+      this.pitch -= e.movementY * sens;
       this.pitch = Math.max(-1.45, Math.min(1.45, this.pitch));
     });
     document.addEventListener('keydown', (e) => { this.keys[e.code] = true; });

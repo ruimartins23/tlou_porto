@@ -16,6 +16,8 @@ import { WeaponSystem } from './weapons.js';
 import { GameAudio } from './audio.js';
 import { UI } from './ui.js';
 import { Lang, setLang, tr, UI_TEXT } from './lang.js';
+import { Settings, loadSettings, saveSettings, applySettings } from './settings.js';
+import { hasSave, saveGame, loadGame, clearSave } from './save.js';
 
 // ---------------------------------------------------------------- localization
 const CONTROLS = {
@@ -92,6 +94,39 @@ const follower = new Follower(scene, world);
 const weapons = new WeaponSystem(camera, world, audio, player);
 const story = new Story(scene, world, ui, audio, player, follower, weapons);
 
+// ---------------------------------------------------------------- settings
+loadSettings();
+const applyAll = () => applySettings({ renderer, composer, audio, world, bloomPass: bloom, smaaPass: smaa });
+applyAll();
+player.sensitivity = () => Settings.sensitivity;
+
+function syncSettingsUI() {
+  $('set-sens').value = Settings.sensitivity;
+  $('set-bright').value = Settings.brightness;
+  $('set-vol').value = Settings.volume;
+  $('val-sens').textContent = Number(Settings.sensitivity).toFixed(2);
+  $('val-bright').textContent = Number(Settings.brightness).toFixed(2);
+  $('val-vol').textContent = Math.round(Settings.volume * 100) + '%';
+  document.querySelectorAll('.qbtn').forEach((b) => b.classList.toggle('on', b.dataset.q === Settings.quality));
+}
+function openSettings(on) {
+  $('settings').style.display = on ? 'block' : 'none';
+  settingsOpen = on;
+  if (on) syncSettingsUI();
+}
+let settingsOpen = false;
+
+$('set-sens').addEventListener('input', (e) => { Settings.sensitivity = +e.target.value; syncSettingsUI(); saveSettings(); });
+$('set-bright').addEventListener('input', (e) => { Settings.brightness = +e.target.value; applyAll(); syncSettingsUI(); saveSettings(); });
+$('set-vol').addEventListener('input', (e) => { Settings.volume = +e.target.value; applyAll(); syncSettingsUI(); saveSettings(); });
+document.querySelectorAll('.qbtn').forEach((b) => b.addEventListener('click', () => {
+  Settings.quality = b.dataset.q; applyAll(); syncSettingsUI(); saveSettings();
+  grade.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+}));
+$('btn-settings').addEventListener('click', (e) => { e.currentTarget.blur(); openSettings(true); });
+$('btn-settings-pause').addEventListener('click', (e) => { e.currentTarget.blur(); openSettings(true); });
+$('btn-settings-close').addEventListener('click', (e) => { e.currentTarget.blur(); openSettings(false); });
+
 // enemy roster — [type, waypoints[[x,y,z]...]]
 const HERD = { sightRange: 9, fovCos: Math.cos(THREE.MathUtils.degToRad(48)), hearWalk: 3.2, hearRun: 16, chaseSpeed: 5.5, speed: 0.7 };
 const enemies = [
@@ -166,7 +201,7 @@ let dead = false;
 let journalOpen = false;
 let craftOpen = false;
 
-player.uiBlocked = () => ui.dialogueActive || paused || journalOpen || craftOpen || dead;
+player.uiBlocked = () => ui.dialogueActive || paused || journalOpen || craftOpen || settingsOpen || dead;
 player.onBrickLand = (pos) => { for (const e of enemies) e.hearNoise(pos, 17); };
 // a molotov shattering is loud and bright — it draws the whole block
 player.onMolotovLand = (pos) => { for (const e of enemies) e.hearNoise(pos, 28); };
@@ -177,8 +212,10 @@ weapons.enemies = enemies;
 weapons.onNoise = (pos, radius) => { for (const e of enemies) e.hearNoise(pos, radius); };
 weapons.onHudChange = () => ui.setWeapon(weapons);
 
+story.onCheckpoint = () => autosave();
 story.onStageChange = (n) => {
   audio.setDrone(n === 4 || n === 6);
+  if (n >= 1) autosave();
   // arm the city the moment you leave the shelter — no cheap deaths mid-prologue
   if (n >= 1 && !combatArmed) {
     combatArmed = true;
@@ -359,6 +396,7 @@ document.addEventListener('keydown', (e) => {
   } else if (e.code === 'KeyP') {
     setFpsShown(!fpsShown);
   } else if (e.code === 'Escape' && !document.pointerLockElement) {
+    if (settingsOpen) { openSettings(false); return; }
     if (!ui.dialogueActive) setPaused(!paused);
   }
 });
@@ -392,6 +430,12 @@ document.addEventListener('pointerlockchange', () => {
   if (!document.pointerLockElement && !ui.dialogueActive) setPaused(true);
 });
 
+// autosave on every checkpoint, and surface it quietly
+function autosave() {
+  if (!started || ended || dead) return;
+  if (saveGame({ story, player, weapons, ui })) ui.toast(UI_TEXT.saved, 1800);
+}
+
 function setPaused(on) {
   paused = on;
   if (on && craftOpen) craftOpen = ui.toggleCraft(player, false);  // Esc/blur closes the kit too
@@ -410,11 +454,21 @@ $('btn-lang').addEventListener('click', (e) => {
   if (craftOpen) ui.renderCraft(player);
 });
 
+// a finished or abandoned run can be resumed from the last checkpoint
+if (hasSave()) $('btn-continue').style.display = '';
+$('btn-continue').addEventListener('click', (e) => {
+  e.currentTarget.blur();
+  pendingLoad = true;
+  $('btn-start').click();
+});
+let pendingLoad = false;
+
 $('btn-start').addEventListener('click', (e) => {
   e.currentTarget.blur();
   started = true;
   audio.init();
   audio.resume();
+  applyAll();               // the audio context exists now — honour the saved volume
   audio.listener = camera; // positional audio: pan/attenuate by enemy world position
   $('title-screen').classList.add('hidden');
   ui.showHud();
@@ -424,7 +478,23 @@ $('btn-start').addEventListener('click', (e) => {
   ui.setWeapon(weapons);
   tryLockPointer();
   player.enabled = true;
-  story.begin();
+  if (pendingLoad) {
+    pendingLoad = false;
+    const ok = loadGame({ story, player, weapons, ui, follower, enemies,
+      onStage: (n) => { combatArmed = n >= 1; for (const en of enemies) en.setActive(n >= 1); } });
+    if (ok) {
+      ui.setHealth(player.health, player.maxHealth);
+      ui.setSupplies(player.bandages, player.bricks, player.molotovs);
+      ui.setShivs(player.shivs);
+      ui.setWeapon(weapons);
+      ui.toast({ en: 'Picking up where you left off.', pt: 'A retomar de onde ficaste.' });
+    } else {
+      story.begin();
+    }
+  } else {
+    clearSave();
+    story.begin();
+  }
 });
 
 $('btn-resume').addEventListener('click', (e) => { e.currentTarget.blur(); setPaused(false); });
@@ -584,6 +654,15 @@ function frame() {
 // Warm the shader cache before the first frame — otherwise the first time each material
 // is seen the driver compiles it mid-frame and the game hitches as you enter new areas.
 try { renderer.compile(scene, camera); } catch (e) { /* non-fatal */ }
+// the world is built and the shaders are warm — drop the loading veil
+{
+  const bar = $('loading-bar');
+  if (bar) bar.style.width = '100%';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    $('loading').classList.add('done');
+    setTimeout(() => { $('loading').style.display = 'none'; }, 700);
+  }));
+}
 
 let fpsFrames = 0, fpsLast = performance.now(), fpsValue = 0, fpsShown = false;
 const frameTimes = [];
@@ -598,4 +677,5 @@ try { if (localStorage.getItem('cinza.fps') === '1') setFpsShown(true); } catch 
 frame();
 
 // Debug/testing hooks
+window.__settings = Settings;
 window.__game = { player, story, world, enemies, follower, weapons, ui, camera, scene, audio, grade, renderer, composer, getFps: () => fpsValue };
