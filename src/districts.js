@@ -118,11 +118,15 @@ function ruinHouse(world, x, width, floors, colorIdx, {
   const out = (n) => front + faceDir * n;      // push further out along the facing
   const trim = world.mats.granite;
   const floorsN = gutted ? 1 : floors;
-  // plinth at street level
-  const plinth = new THREE.Mesh(new THREE.BoxGeometry(width + 0.16, 0.72, 0.3), trim);
-  plinth.position.set(x, groundY + 0.36, front);
-  plinth.castShadow = true; plinth.receiveShadow = true;
-  world.scene.add(plinth);
+  // plinth — only on frontages that actually stand on a street. Raised storeys and
+  // rows sitting back on the hillside would otherwise wear a granite band in mid-air.
+  const gh = world.groundAt(x, front, groundY + 1.2);
+  if (gh !== null && Math.abs(gh - groundY) < 0.6) {
+    const plinth = new THREE.Mesh(new THREE.BoxGeometry(width + 0.16, 0.72, 0.3), trim);
+    plinth.position.set(x, groundY + 0.36, front);
+    plinth.castShadow = true; plinth.receiveShadow = true;
+    world.scene.add(plinth);
+  }
   // cornice under the roofline
   const cornice = new THREE.Mesh(new THREE.BoxGeometry(width + 0.5, 0.34, 0.46), trim);
   cornice.position.set(x, groundY + height - 0.2, out(0.06));
@@ -236,14 +240,6 @@ function buildRibeira(world) {
   flame.position.set(LX, LY + 0.07, LZ);
   world.scene.add(flame);
 
-  // ---- street life on the quay: kerb line, standing water, drifted debris
-  world.kerb(-110, -60, 12.6, 0, 'x');
-  world.kerb(-44, 96, 12.6, 0, 'x');
-  world.puddles(-108, 94, 14, 29, 0, 26);
-  world.debrisScatter(-108, 94, 13, 29, 0, 46);
-  world.puddles(-20, 30, -18, 10, 0, 10);
-  world.debrisScatter(-20, 30, -18, 10, 0, 20);
-
   // ---- Praça da Ribeira
   // o Cubo (dry fountain)
   const basin = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.8, 0.7, 16), M.graniteBig);
@@ -316,10 +312,6 @@ function buildBoats(world) {
 
 // ------------------------------------------------------------------ Largo (L1)
 function buildLargo(world) {
-  // wet cobbles and drifted rubbish give the largo depth the flat plane lacks
-  world.puddles(-28, 38, -88, -58, 12, 16);
-  world.debrisScatter(-28, 38, -88, -58, 12, 30);
-  world.kerb(-28, 38, -57.4, 12, 'x');
 
   const M = world.mats;
   // shop rows around the largo
@@ -457,8 +449,6 @@ function buildSaoBento(world) {
   world.locations.stationExit = new THREE.Vector3(65, 22, -114);
 
   // plaza dressing
-  world.puddles(-16, 44, -150, -114, 22, 16);
-  world.debrisScatter(-16, 44, -150, -114, 22, 30);
   world.carWreck(20, -134, 22, 0.9);
   world.carWreck(4, -122, 22, -0.5);
   world.rubblePile(-10, -140, 22, 3, 2, 14);
@@ -472,8 +462,6 @@ function buildSaoBento(world) {
 
 // ------------------------------------------------------------------ Sé (L3)
 function buildSe(world) {
-  world.puddles(58, 112, -82, -32, 28, 14);
-  world.debrisScatter(58, 112, -82, -32, 28, 28);
 
   const M = world.mats;
   const add = (m) => { world.scene.add(m); return m; };
@@ -625,8 +613,6 @@ function buildSe(world) {
 
 // ------------------------------------------------------------------ Gaia
 function buildGaia(world) {
-  world.puddles(20, 120, 104, 144, 0, 14);
-  world.debrisScatter(20, 120, 104, 144, 0, 26);
 
   const M = world.mats;
   const X1 = 40, X2 = 85, Z1 = 122, Z2 = 146, H = 8;
@@ -984,6 +970,9 @@ function buildBolhao(world) {
 }
 
 export function buildDistricts(world) {
+  // Terrain meshes exist but have never been rendered, so their world matrices are still
+  // stale — every ground raycast during the build would miss. Flush them once up front.
+  world.scene.updateMatrixWorld(true);
   buildRibeira(world);
   buildLargo(world);
   buildSaoBento(world);
@@ -991,4 +980,34 @@ export function buildDistricts(world) {
   buildSe(world);
   buildGaia(world);
   buildBackdrop(world);
+  dressStreets(world);
+}
+
+// Street dressing runs last, once every district has registered its solids — otherwise
+// puddles and debris get scattered into walls that do not exist yet.
+function dressStreets(world) {
+  world.scene.updateMatrixWorld(true);
+  // Ribeira quay
+  world.kerb(-110, -60, 12.6, 0, 'x');
+  world.kerb(-44, 96, 12.6, 0, 'x');
+  world.puddles(-108, 94, 14, 29, 0, 26);
+  world.debrisScatter(-108, 94, 13.5, 29, 0, 46);
+  world.puddles(-18, 30, -17, 9, 0, 10);
+  world.debrisScatter(-18, 30, -17, 9, 0, 20);
+  // Largo de São Domingos
+  world.kerb(-28, 38, -57.4, 12, 'x');
+  world.puddles(-28, 38, -88, -58, 12, 16);
+  world.debrisScatter(-28, 38, -88, -58, 12, 30);
+  // Praça de Almeida Garrett
+  world.puddles(-16, 44, -150, -114, 22, 16);
+  world.debrisScatter(-16, 44, -150, -114, 22, 30);
+  // Terreiro da Sé
+  world.puddles(58, 112, -82, -32, 28, 14);
+  world.debrisScatter(58, 112, -82, -32, 28, 28);
+  // Mercado do Bolhão courtyard
+  world.puddles(-8, 34, -194, -167, 22, 10);
+  world.debrisScatter(-8, 34, -194, -167, 22, 22);
+  // Gaia bank
+  world.puddles(20, 120, 104, 144, 0, 14);
+  world.debrisScatter(20, 120, 104, 144, 0, 26);
 }

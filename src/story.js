@@ -756,6 +756,13 @@ export class Story {
   }
 
   makeProp(id, pos, mesh) {
+    // a pickup buried in a wall is invisible and unreachable — slide it into the open
+    if (this.world.insideSolid(pos.x, pos.y + 0.15, pos.z)) {
+      const out = this.world.pushOutOfSolids(pos.x, pos.y + 0.15, pos.z);
+      pos = pos.clone().set(out.x, pos.y, out.z);
+      const gh = this.world.groundAt(out.x, out.z, pos.y + 3);
+      if (gh !== null && Math.abs(gh + 0.15 - pos.y) < 3) pos.y = gh + 0.15;
+    }
     mesh.position.copy(pos);
     mesh.castShadow = true;
     this.scene.add(mesh);

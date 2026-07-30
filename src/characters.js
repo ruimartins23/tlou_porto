@@ -150,7 +150,16 @@ export class Enemy {
     this.group = type === 'corvo'
       ? makePerson({ shirt: 0x33302c, pants: 0x26241f, skin: 0xb08a6a, hat: 0x1c1a18 })
       : makeInfected(type);
-    this.waypoints = waypoints.map((w) => new THREE.Vector3(w[0], w[1], w[2]));
+    // waypoints are hand-placed; nudge any that ended up inside a wall so nobody spawns
+    // sealed in masonry (they would clip out on their first step anyway, visibly)
+    this.waypoints = waypoints.map((w) => {
+      const v = new THREE.Vector3(w[0], w[1], w[2]);
+      if (world.insideSolid(v.x, v.y + 0.9, v.z)) {
+        const o = world.pushOutOfSolids(v.x, v.y + 0.9, v.z, 0.6);
+        v.x = o.x; v.z = o.z;
+      }
+      return v;
+    });
     this.home = this.waypoints[0].clone();
     this.group.position.copy(this.home);
     scene.add(this.group);

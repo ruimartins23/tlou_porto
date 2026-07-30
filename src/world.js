@@ -276,6 +276,54 @@ export class World {
     return m;
   }
 
+  // is this point inside a wall/building volume?
+  insideSolid(x, y, z) {
+    for (let i = 0; i < this.solids.length; i++) {
+      const s = this.solids[i];
+      if (x > s.x1 && x < s.x2 && z > s.z1 && z < s.z2 && y > s.y1 && y < s.y2 - 0.05) return true;
+    }
+    return false;
+  }
+
+  // Shove a point out of any solid it is buried in, along the shortest axis. Used so a
+  // hand-placed pickup or patrol point can never end up sealed inside a wall.
+  pushOutOfSolids(x, y, z, margin = 0.55) {
+    let px = x, pz = z;
+    for (let pass = 0; pass < 10; pass++) {
+      let moved = false;
+      for (const s of this.solids) {
+        if (!(px > s.x1 - margin && px < s.x2 + margin && pz > s.z1 - margin && pz < s.z2 + margin)) continue;
+        if (!(y > s.y1 && y < s.y2 - 0.05)) continue;
+        const outs = [
+          [s.x1 - margin - px, 'x'], [s.x2 + margin - px, 'x'],
+          [s.z1 - margin - pz, 'z'], [s.z2 + margin - pz, 'z'],
+        ].sort((a, b) => Math.abs(a[0]) - Math.abs(b[0]));
+        let placed = false;
+        for (const [d, axis] of outs) {
+          const nx = axis === 'x' ? px + d : px;
+          const nz = axis === 'z' ? pz + d : pz;
+          if (!this.insideSolid(nx, y, nz)) { px = nx; pz = nz; placed = true; break; }
+        }
+        if (!placed) { const [d, axis] = outs[0]; if (axis === 'x') px += d; else pz += d; }
+        moved = true;
+      }
+      if (!moved) break;
+    }
+    return { x: px, z: pz };
+  }
+
+  // pick a spot in the rect that is clear of geometry and actually has floor under it
+  freeSpot(x1, x2, z1, z2, y, tries = 12) {
+    for (let i = 0; i < tries; i++) {
+      const x = x1 + rand() * (x2 - x1), z = z1 + rand() * (z2 - z1);
+      if (this.insideSolid(x, y + 0.4, z)) continue;
+      const g = this.groundAt(x, z, y + 2.5);
+      if (g === null || Math.abs(g - y) > 0.35) continue;
+      return { x, z };
+    }
+    return null;
+  }
+
   // ---- street dressing ------------------------------------------------------------
   // A tiled plane reads as flat no matter how good the tile is. What sells a street is
   // what has collected ON it: standing water that catches the sky, kerbs that cut a
@@ -289,10 +337,12 @@ export class World {
     }
     if (!this._puddleGeo) this._puddleGeo = new THREE.CircleGeometry(1, 14);
     for (let i = 0; i < count; i++) {
+      const spot = this.freeSpot(x1, x2, z1, z2, y);
+      if (!spot) continue;                       // never leave water inside a wall
       const m = new THREE.Mesh(this._puddleGeo, this._puddleMat);
       m.rotation.x = -Math.PI / 2;
       m.rotation.z = rand() * Math.PI;
-      m.position.set(x1 + rand() * (x2 - x1), y + 0.012, z1 + rand() * (z2 - z1));
+      m.position.set(spot.x, y + 0.012, spot.z);
       m.scale.set(0.7 + rand() * 2.2, 0.5 + rand() * 1.6, 1);
       m.receiveShadow = false;
       this.scene.add(m);
@@ -304,10 +354,12 @@ export class World {
     const mats = [this.mats.roof, this.mats.woodDark, this.mats.rubbleRock, this.mats.dark];
     for (let i = 0; i < count; i++) {
       const mat = mats[Math.floor(rand() * mats.length)];
+      const spot = this.freeSpot(x1, x2, z1, z2, y);
+      if (!spot) continue;
       const w = 0.18 + rand() * 0.55, d = 0.14 + rand() * 0.5;
       const m = new THREE.Mesh(this.unitBox(), mat);
       m.scale.set(w, 0.05 + rand() * 0.07, d);
-      m.position.set(x1 + rand() * (x2 - x1), y + 0.03, z1 + rand() * (z2 - z1));
+      m.position.set(spot.x, y + 0.03, spot.z);
       m.rotation.y = rand() * Math.PI;
       m.rotation.z = (rand() - 0.5) * 0.12;
       m.castShadow = true; m.receiveShadow = true;
