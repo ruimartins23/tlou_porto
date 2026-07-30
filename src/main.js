@@ -224,6 +224,16 @@ function findShivTarget() {
   return best;
 }
 
+// Screen-relative bearing of a world position: 0 = dead ahead, +right, -left.
+// The player's forward is (-sin yaw, -cos yaw), i.e. world bearing yaw + PI.
+function bearingTo(pos) {
+  const dx = pos.x - player.position.x, dz = pos.z - player.position.z;
+  let rel = Math.atan2(dx, dz) - (player.yaw + Math.PI);
+  while (rel > Math.PI) rel -= Math.PI * 2;
+  while (rel < -Math.PI) rel += Math.PI * 2;
+  return -rel;   // CSS rotates clockwise, world bearing runs the other way
+}
+
 // A body you put down can be searched once — the scavenging half of the crafting loop.
 // Corvos carried gear; the infected only have the rags and bottles they died holding.
 function findLootTarget() {
@@ -494,6 +504,7 @@ function frame() {
         e.update(dt, t, player.position, player.moving, player.running, (dmg) => {
           player.takeDamage(dmg);
           ui.flashDamage();
+          ui.showDamageFrom(bearingTo(e.group.position));   // which way the hit came from
           ui.setHealth(player.health, player.maxHealth);
           if (player.health <= 0) onPlayerDeath();
         });

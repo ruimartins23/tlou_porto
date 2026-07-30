@@ -165,6 +165,16 @@ export class UI {
     wrap.firstElementChild.style.width = `${Math.round(v * 100)}%`;
   }
 
+  // swing the damage arc toward the attacker (radians, 0 = dead ahead)
+  showDamageFrom(rel) {
+    const el = $('dmg-dir');
+    if (!el) return;
+    el.style.transform = `rotate(${(rel * 180 / Math.PI).toFixed(1)}deg)`;
+    el.style.opacity = 1;
+    clearTimeout(this._dmgDirT);
+    this._dmgDirT = setTimeout(() => { el.style.opacity = 0; }, 620);
+  }
+
   flashDamage() {
     const el = $('damage-flash');
     el.style.opacity = 1;

@@ -119,6 +119,14 @@
     position: fixed; inset: 0; pointer-events: none;
     background: radial-gradient(ellipse at center, transparent 52%, rgba(0,0,0,0.5) 100%);
   }
+  /* directional damage: an arc that swings to the side the hit came from */
+  #dmg-dir { position: absolute; top: 50%; left: 50%; width: 0; height: 0; pointer-events: none;
+    opacity: 0; transition: opacity 0.45s; }
+  #dmg-dir .arc {
+    position: absolute; width: 210px; height: 210px; left: -105px; top: -105px; border-radius: 50%;
+    border: 6px solid transparent; border-top-color: rgba(206,42,28,0.92);
+    box-shadow: 0 0 14px rgba(180,30,20,0.55);
+  }
   #damage-flash {
     position: fixed; inset: 0; pointer-events: none; background: rgba(120,10,10,0.4);
     opacity: 0; transition: opacity 0.35s;
@@ -270,6 +278,7 @@
         <span id="weapon-reload" class="key" style="display:none">[R] reload</span>
       </div>
     </div>
+    <div id="dmg-dir"><div class="arc"></div></div>
     <div id="detect"><div></div></div>
     <div id="marker">◆<span class="dist"></span></div>
     <div id="toast"></div>
